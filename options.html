@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Idently Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <svg class="logo" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#5b5bd6"/><circle cx="16" cy="20" r="6" fill="#ffffff" opacity="0.95"/><circle cx="32" cy="20" r="6" fill="#ffffff" opacity="0.7"/><circle cx="24" cy="32" r="6" fill="#ffffff" opacity="0.85"/></svg>
+      <div>
+        <h1>Idently</h1>
+        <p class="subtitle">Settings</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>General</h2>
+          <p class="section-desc">Preferences sync across your devices via Firefox Sync, along with your site rules.</p>
+        </div>
+      </div>
+      <div class="pref-card">
+        <label class="pref-row">
+          <div>
+            <div class="pref-title">Show sidebar</div>
+            <div class="pref-desc">The pill on the left edge of every page. Turn off to use only the toolbar popup.</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" id="showSidebarCheck" checked />
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Site rules</h2>
+          <p class="section-desc">
+            When a new session tab is still unnamed, a matching rule watches the page
+            and names the session automatically — e.g. from the email field on a login form.
+          </p>
+        </div>
+        <button class="btn primary" id="addRuleBtn">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add site
+        </button>
+      </div>
+
+      <div id="ruleForm" class="rule-form hidden">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Site name</span>
+            <input type="text" id="fLabel" placeholder="Cloudflare" maxlength="60" />
+          </label>
+          <label class="field">
+            <span class="field-label">Domain <span class="req">required</span></span>
+            <input type="text" id="fDomain" placeholder="dash.cloudflare.com" maxlength="200" />
+            <span class="field-hint">Exact host, including port if any (e.g. localhost:5050)</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Path prefix</span>
+            <input type="text" id="fPathPrefix" placeholder="/login (optional — empty matches any page)" maxlength="200" />
+          </label>
+          <label class="field">
+            <span class="field-label">Container prefix</span>
+            <input type="text" id="fShortLabel" placeholder="CF (optional — shortens container names)" maxlength="20" />
+          </label>
+          <label class="field">
+            <span class="field-label">Selector type</span>
+            <select id="fSelectorType">
+              <option value="xpath">XPath</option>
+              <option value="css">CSS selector</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Selector <span class="req">required</span></span>
+            <input type="text" id="fSelector" placeholder="//*[@id=&quot;email&quot;]" maxlength="500" />
+            <span class="field-hint">Points at the element holding the account name/email</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Read</span>
+            <select id="fReadFrom">
+              <option value="value">Input value</option>
+              <option value="text">Text content</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Value pattern</span>
+            <input type="text" id="fPattern" placeholder="^[^@\s]+@[^@\s]+\.[^@\s]+$ (optional regex)" maxlength="300" />
+            <span class="field-hint">Recommended — e.g. an email regex stops half-typed values being used as the name</span>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="btn secondary" id="cancelRuleBtn">Cancel</button>
+          <button class="btn primary" id="saveRuleBtn">Save rule</button>
+        </div>
+        <div id="formError" class="form-error hidden"></div>
+      </div>
+
+      <div id="rulesList" class="rules-list"></div>
+      <div id="rulesEmpty" class="empty-state hidden">No site rules yet. Add one to enable auto-naming.</div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Backup</h2>
+          <p class="section-desc">
+            Export your sessions to a JSON file, or restore them into another profile or machine.
+            Including cookies carries live logins across — treat that file like a password.
+          </p>
+        </div>
+      </div>
+      <div class="backup-card">
+        <label class="checkbox-label">
+          <input type="checkbox" id="includeCookiesCheck" />
+          Include cookies / session data
+        </label>
+        <div class="backup-actions">
+          <button class="btn secondary" id="exportBtn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+          <button class="btn secondary" id="importBtn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import
+          </button>
+          <input type="file" id="importFile" accept="application/json" class="hidden-file" />
+        </div>
+        <div id="backupStatus" class="backup-status"></div>
+      </div>
+    </section>
+
+    <div id="status" class="status"></div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

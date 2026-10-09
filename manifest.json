@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Idently",
+  "version": "0.3.0",
+  "description": "Tag the current tab's container with a name, color and notes, then spin up fresh tagged instances of the same site.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "idently@local.dev",
+      "strict_min_version": "139.0"
+    }
+  },
+  "permissions": [
+    "contextualIdentities",
+    "cookies",
+    "tabs",
+    "tabGroups",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["sidebar.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg"
+    },
+    "default_title": "Idently"
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  }
+}
