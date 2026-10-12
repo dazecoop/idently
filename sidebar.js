@@ -47,6 +47,33 @@
 
   let host, root, handleEl, panelEl;
 
+  // Lets the popup build a site rule from this tab without the user having
+  // to hand-write a selector: it can ask this content script to scan the
+  // page for likely identity fields, and to test a candidate selector live.
+  // Registered up front (not inside init()) so it responds even before
+  // ctx/siteRules have loaded.
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg?.action === "idently-probe-fields") {
+      try { return Promise.resolve({ ok: true, candidates: probeIdentityFields() }); }
+      catch (e) { logError("probeIdentityFields failed:", e); return Promise.resolve({ ok: false, error: e.message }); }
+    }
+    if (msg?.action === "idently-test-selector") {
+      const { selectorType, selector, readFrom, pattern } = msg;
+      try {
+        const node = resolveSelector(selectorType, selector);
+        const value = readNodeValue(node, readFrom);
+        let patternOk = true;
+        if (pattern) {
+          try { patternOk = new RegExp(pattern).test(value); } catch { patternOk = true; }
+        }
+        return Promise.resolve({ ok: true, found: !!node, value, patternOk });
+      } catch (e) {
+        return Promise.resolve({ ok: false, error: e.message });
+      }
+    }
+    return undefined;
+  });
+
   init();
 
   async function init() {
@@ -141,6 +168,113 @@
 
   let autoNameCleanup = null;
 
+  function resolveSelector(selectorType, selector) {
+    return selectorType === "css"
+      ? document.querySelector(selector)
+      : document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+  }
+
+  function readNodeValue(node, readFrom) {
+    if (!node) return "";
+    const value = readFrom === "text"
+      ? (node.textContent || "")
+      : ("value" in node ? node.value : node.textContent || "");
+    return value.trim();
+  }
+
+  function isVisible(el) {
+    if (!el || !(el instanceof Element)) return false;
+    const style = getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function cssEscape(s) {
+    return typeof CSS !== "undefined" && CSS.escape ? CSS.escape(s) : s.replace(/([^\w-])/g, "\\$1");
+  }
+
+  // A short, reasonably stable CSS path: prefer an id anywhere up the tree,
+  // otherwise climb a few ancestors tagging on :nth-of-type where a tag
+  // repeats among its siblings. Good enough as a starting point for a site
+  // rule — the user can always edit it (or switch to XPath) before saving.
+  function cssPath(el) {
+    if (el.id) return `#${cssEscape(el.id)}`;
+    const parts = [];
+    let node = el;
+    let depth = 0;
+    while (node && node.nodeType === 1 && node !== document.body && depth < 6) {
+      if (node.id) { parts.unshift(`#${cssEscape(node.id)}`); break; }
+      let part = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (parent) {
+        const siblings = [...parent.children].filter((c) => c.tagName === node.tagName);
+        if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(node) + 1})`;
+      }
+      parts.unshift(part);
+      node = parent;
+      depth++;
+    }
+    return parts.join(" > ");
+  }
+
+  function describeInput(el) {
+    const type = el.type ? ` (type=${el.type})` : "";
+    const hint = el.placeholder || el.name || el.id || "";
+    return `Input field${type}${hint ? ` — "${hint}"` : ""}`;
+  }
+
+  // Heuristic scan for "which field shows who's logged in" — used by the
+  // popup's "Detect automatically" button when creating a site rule. Scores
+  // visible inputs by how strongly their attributes suggest an email/
+  // username field (never a password field), then falls back to short leaf
+  // text nodes that look like an email address (e.g. "Signed in as x@y.com").
+  function probeIdentityFields() {
+    const results = [];
+    const seen = new Set();
+    const idHint = /email|user(name)?|login|account/i;
+
+    const addCandidate = (el, selectorType, selector, readFrom, label) => {
+      if (!selector || seen.has(selector)) return;
+      seen.add(selector);
+      results.push({ selectorType, selector, readFrom, label, preview: readNodeValue(el, readFrom).slice(0, 60) });
+    };
+
+    const inputs = [...document.querySelectorAll("input")].filter(isVisible);
+    const scored = inputs.map((el) => {
+      const type = (el.type || "").toLowerCase();
+      let score = 0;
+      if (type === "password") score -= 10;
+      if (type === "email") score += 3;
+      if (idHint.test(el.id || "")) score += 2;
+      if (idHint.test(el.name || "")) score += 2;
+      if (idHint.test(el.autocomplete || "")) score += 2;
+      if (idHint.test(el.placeholder || "")) score += 1;
+      return { el, score };
+    }).filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+
+    for (const { el } of scored.slice(0, 4)) {
+      addCandidate(el, "css", cssPath(el), "value", describeInput(el));
+    }
+
+    if (results.length < 5) {
+      const emailRe = /[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/;
+      const textEls = [...document.querySelectorAll("body *")]
+        .filter((el) => {
+          if (el.children.length > 0) return false; // leaf nodes only
+          const t = (el.textContent || "").trim();
+          return t.length > 0 && t.length < 100 && emailRe.test(t) && isVisible(el);
+        })
+        .slice(0, 10);
+      for (const el of textEls) {
+        if (results.length >= 6) break;
+        addCandidate(el, "css", cssPath(el), "text", "Text containing an email address");
+      }
+    }
+
+    return results.slice(0, 6);
+  }
+
   function findSiteRule() {
     let pathname = "";
     try { pathname = new URL(ctx.url).pathname; } catch {}
@@ -196,21 +330,13 @@
     const read = () => {
       let node = null;
       try {
-        node = rule.selectorType === "css"
-          ? document.querySelector(rule.selector)
-          : document.evaluate(rule.selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        node = resolveSelector(rule.selectorType, rule.selector);
       } catch (e) {
         if (lastLogged !== "bad-selector") logError(`[${tag}] selector failed:`, e.message);
         lastLogged = "bad-selector";
         return null;
       }
-      let value = "";
-      if (node) {
-        value = rule.readFrom === "text"
-          ? (node.textContent || "")
-          : ("value" in node ? node.value : node.textContent || "");
-      }
-      value = value.trim();
+      const value = readNodeValue(node, rule.readFrom);
       const state = !node ? "no node" : JSON.stringify(value);
       if (state !== lastLogged) log(`[${tag}] target:`, state);
       lastLogged = state;

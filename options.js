@@ -27,6 +27,23 @@ async function init() {
   document.getElementById("exportBtn").addEventListener("click", exportData);
   document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
   document.getElementById("importFile").addEventListener("change", importData);
+
+  // Rules can also be created from the popup's "Create rule for this site"
+  // window, which may well be open at the same time as this page — reflect
+  // that immediately instead of waiting for a manual reload.
+  browser.storage.onChanged.addListener((changes) => {
+    if (changes.siteRules) {
+      rules = Array.isArray(changes.siteRules.newValue) ? changes.siteRules.newValue : [];
+      if (!document.getElementById("ruleForm").classList.contains("hidden")) {
+        // Don't yank the form out from under an in-progress edit.
+        return;
+      }
+      renderRules();
+    }
+    if (changes.showSidebar) {
+      sidebarCheck.checked = changes.showSidebar.newValue !== false;
+    }
+  });
 }
 
 function setBackupStatus(text) {

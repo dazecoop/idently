@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Idently — New site rule</title>
+  <link rel="stylesheet" href="rulebuilder.css" />
+</head>
+<body>
+  <div class="page">
+    <div class="rb-header">
+      <svg class="logo" viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#5b5bd6"/><circle cx="16" cy="20" r="6" fill="#ffffff" opacity="0.95"/><circle cx="32" cy="20" r="6" fill="#ffffff" opacity="0.7"/><circle cx="24" cy="32" r="6" fill="#ffffff" opacity="0.85"/></svg>
+      <div>
+        <h1>New site rule</h1>
+        <p class="rb-domain" id="rbDomainDisplay"></p>
+      </div>
+    </div>
+    <p class="rb-hint">
+      Finds the field that shows who's logged in (usually an email), so Idently can auto-name
+      future sessions on this site. Switch back to the tab to log in or adjust the page, then
+      come back here to detect or test — this window stays open while you do.
+    </p>
+
+    <div class="rb-detect-row">
+      <button class="btn secondary" id="detectBtn">Detect automatically</button>
+      <span id="detectStatus" class="rb-status"></span>
+    </div>
+    <div id="candidatesList" class="candidates hidden"></div>
+
+    <div class="rb-grid">
+      <label class="field">
+        <span class="field-label">Site name</span>
+        <input type="text" id="rbLabel" maxlength="60" placeholder="optional" />
+      </label>
+      <label class="field">
+        <span class="field-label">Selector type</span>
+        <select id="rbSelectorType">
+          <option value="css">CSS selector</option>
+          <option value="xpath">XPath</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Selector <span class="req">required</span></span>
+        <input type="text" id="rbSelector" maxlength="500" placeholder="#email" />
+      </label>
+      <label class="field">
+        <span class="field-label">Read</span>
+        <select id="rbReadFrom">
+          <option value="value">Input value</option>
+          <option value="text">Text content</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Value pattern</span>
+        <input type="text" id="rbPattern" maxlength="300" placeholder="optional regex, e.g. an email shape" />
+      </label>
+      <label class="field">
+        <span class="field-label">Path prefix</span>
+        <input type="text" id="rbPathPrefix" maxlength="200" placeholder="optional — empty matches any page" />
+      </label>
+      <label class="field">
+        <span class="field-label">Container prefix</span>
+        <input type="text" id="rbShortLabel" maxlength="20" placeholder="optional" />
+      </label>
+    </div>
+
+    <div class="rb-test-row">
+      <button class="btn secondary" id="testSelectorBtn">Test on this page</button>
+      <span id="testResult" class="rb-status"></span>
+    </div>
+
+    <div id="rbFormError" class="form-error hidden"></div>
+
+    <div class="rb-actions">
+      <span id="rbSaveStatus" class="rb-status"></span>
+      <div class="rb-actions-buttons">
+        <button class="btn secondary" id="cancelRuleBtn">Cancel</button>
+        <button class="btn primary" id="saveRuleBtn">Save rule</button>
+      </div>
+    </div>
+  </div>
+  <script src="rulebuilder.js"></script>
+</body>
+</html>

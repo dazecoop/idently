@@ -7,14 +7,23 @@ const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const ICONS = {
   open: `<svg ${SVG_ATTRS}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
   close: `<svg ${SVG_ATTRS}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-  chevron: `<svg ${SVG_ATTRS}><polyline points="9 18 15 12 9 6"/></svg>`
+  chevron: `<svg ${SVG_ATTRS}><polyline points="9 18 15 12 9 6"/></svg>`,
+  edit: `<svg ${SVG_ATTRS}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`
 };
+
+const COLORS = Object.keys(COLOR_HEX).filter((c) => c !== "toolbar");
+
+const STYLE = "background:#5b5bd6;color:#fff;padding:2px 6px;border-radius:4px;font-weight:bold;";
+const log = (...args) => console.log("%c[Idently][popup]", STYLE, ...args);
 
 let identities = {};
 let currentResults = [];
 let selectedIndex = -1;
 let expandedGroups = new Set();
 let sessionHealth = {};
+let activeTab = null;
+let editingSessionId = null;
+let editColor = null;
 
 init();
 
@@ -34,13 +43,17 @@ async function init() {
 
   document.getElementById("searchInput").addEventListener("input", onSearch);
   document.getElementById("searchInput").addEventListener("keydown", onSearchKeydown);
-  document.getElementById("settingsBtn").addEventListener("click", () => browser.runtime.openOptionsPage());
+
+  document.getElementById("sessionEditCloseBtn").addEventListener("click", closeSessionEdit);
+  document.getElementById("seCancelBtn").addEventListener("click", closeSessionEdit);
+  document.getElementById("seSaveBtn").addEventListener("click", saveSessionEdit);
 
   // Housekeeping: clear out abandoned "+ New session tab" clicks that were
   // never named, except whichever tab is currently active (never yank a
   // tab out from under the user while they're looking at it).
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
   setupNewSessionButton(activeTab);
+  setupMoreMenu();
   browser.runtime.sendMessage({ action: "cleanupUnnamed", excludeCookieStoreId: activeTab?.cookieStoreId })
     .then(async (result) => {
       if (result?.removed) {
@@ -95,8 +108,19 @@ function timeAgo(ts) {
 }
 
 function rerenderActiveView() {
-  if (document.getElementById("searchInput").value.trim()) onSearch();
-  else renderGroups();
+  if (document.getElementById("searchInput").value.trim()) {
+    onSearch();
+    return;
+  }
+  // onSearch() un-hides groupsView itself when the query is empty, but
+  // renderGroups() alone only repopulates the list — it never touches the
+  // hidden class. Callers that just closed another view (e.g. the session
+  // edit panel, which hides groupsView while it's open) need it explicitly
+  // shown again, or the list silently stays invisible until the popup is
+  // reopened from scratch.
+  document.getElementById("groupsView").classList.remove("hidden");
+  document.getElementById("searchView").classList.add("hidden");
+  renderGroups();
 }
 
 function confirmedByDomain() {
@@ -210,6 +234,7 @@ function buildIdentityRow(id, data, showDomain, selected) {
   actions.className = "identity-actions";
   actions.append(
     mkIconBtn("open", "Open in new tab", () => openTab(id, data)),
+    mkIconBtn("edit", "Edit session", () => openSessionEdit(id, data)),
     mkIconBtn("close", "Remove session", () => removeIdentity(id), true)
   );
 
@@ -301,4 +326,118 @@ async function removeIdentity(id) {
   await loadIdentities();
   if (document.getElementById("searchInput").value.trim()) onSearch();
   else renderGroups();
+}
+
+// --- Overflow menu -------------------------------------------------------
+// "Create rule for this site" opens the rule builder in its own small
+// window rather than inline here: this toolbar popup auto-closes the
+// moment it loses focus (standard WebExtension behavior), which made it
+// impossible to flip back to the actual page — e.g. to log in or trigger
+// a field — while testing a selector. A separate window stays open across
+// that, so both can be used side by side.
+
+function setupMoreMenu() {
+  const menuBtn = document.getElementById("moreMenuBtn");
+  const menu = document.getElementById("moreMenu");
+  const createItem = document.getElementById("createRuleMenuItem");
+  const settingsItem = document.getElementById("settingsMenuItem");
+
+  let domain = "";
+  try { domain = new URL(activeTab?.url || "").host; } catch {}
+  if (!domain) {
+    createItem.disabled = true;
+    createItem.title = "Can't create a rule for this page";
+  }
+
+  const closeMenu = () => menu.classList.add("hidden");
+
+  menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.classList.toggle("hidden");
+  });
+  document.addEventListener("click", closeMenu);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+
+  createItem.addEventListener("click", async () => {
+    closeMenu();
+    if (!activeTab?.id || !domain) return;
+    const url = browser.runtime.getURL(
+      `rulebuilder.html?tabId=${activeTab.id}&domain=${encodeURIComponent(domain)}`
+    );
+    try {
+      await browser.windows.create({ url, type: "popup", width: 420, height: 680 });
+    } catch (e) {
+      log("couldn't open rule builder window:", e);
+    }
+  });
+
+  settingsItem.addEventListener("click", () => {
+    closeMenu();
+    browser.runtime.openOptionsPage();
+  });
+}
+
+// --- Session edit panel --------------------------------------------------
+// Lets name/notes/color/domain be edited for ANY session, not just the one
+// matching the active tab. Domain is the key addition: two containers that
+// are really the same site (e.g. "account.proton.me" and "proton.me") show
+// up as separate groups purely because of what domain got recorded when
+// each one was created — editing the domain here merges them into one.
+
+function openSessionEdit(id, data) {
+  editingSessionId = id;
+  editColor = data.color;
+  document.getElementById("groupsView").classList.add("hidden");
+  document.getElementById("searchView").classList.add("hidden");
+  document.getElementById("seName").value = data.name || "";
+  document.getElementById("seNotes").value = data.notes || "";
+  document.getElementById("seDomain").value = data.domain || "";
+  document.getElementById("seFormError").classList.add("hidden");
+  document.getElementById("seSaveStatus").textContent = "";
+  renderSwatches();
+  document.getElementById("sessionEditView").classList.remove("hidden");
+}
+
+function closeSessionEdit() {
+  editingSessionId = null;
+  document.getElementById("sessionEditView").classList.add("hidden");
+  rerenderActiveView();
+}
+
+function renderSwatches() {
+  const wrap = document.getElementById("seSwatches");
+  wrap.innerHTML = "";
+  for (const color of COLORS) {
+    const sw = document.createElement("div");
+    sw.className = "swatch" + (color === editColor ? " selected" : "");
+    sw.style.background = COLOR_HEX[color];
+    sw.addEventListener("click", () => {
+      editColor = color;
+      wrap.querySelectorAll(".swatch").forEach((s, i) => s.classList.toggle("selected", COLORS[i] === color));
+    });
+    wrap.appendChild(sw);
+  }
+}
+
+async function saveSessionEdit() {
+  document.getElementById("seFormError").classList.add("hidden");
+
+  const name = document.getElementById("seName").value.trim() || "Unnamed";
+  const notes = document.getElementById("seNotes").value.trim();
+  const domain = document.getElementById("seDomain").value.trim();
+  if (!domain) return showSessionEditError("Domain is required.");
+
+  await browser.runtime.sendMessage({
+    action: "updateIdentity", cookieStoreId: editingSessionId, name, notes, color: editColor, domain
+  });
+  await loadIdentities();
+
+  document.getElementById("seSaveStatus").textContent = "Saved ✓";
+  setTimeout(closeSessionEdit, 700);
+}
+
+function showSessionEditError(text) {
+  const el = document.getElementById("seFormError");
+  el.textContent = text;
+  el.classList.remove("hidden");
 }

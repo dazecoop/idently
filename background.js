@@ -5,14 +5,6 @@ const ERR_STYLE = "background:#dc2626;color:#fff;padding:2px 6px;border-radius:4
 const log = (...args) => console.log("%c[Idently][background]", STYLE, ...args);
 const logError = (...args) => console.error("%c[Idently][background] ERROR", ERR_STYLE, ...args);
 
-browser.contextualIdentities.onRemoved.addListener(async ({ contextualIdentity }) => {
-  const { identities = {} } = await browser.storage.local.get("identities");
-  if (identities[contextualIdentity.cookieStoreId]) {
-    delete identities[contextualIdentity.cookieStoreId];
-    await browser.storage.local.set({ identities });
-  }
-});
-
 async function getIdentities() {
   const { identities = {} } = await browser.storage.local.get("identities");
   return identities;
@@ -21,6 +13,33 @@ async function getIdentities() {
 async function setIdentities(identities) {
   await browser.storage.local.set({ identities });
 }
+
+// Several message handlers below do read-modify-write on the same
+// `identities` record (confirmIdentity, cleanupUnnamed, openIdentityTab,
+// etc.), and messages can genuinely overlap — e.g. auto-naming confirms a
+// session right as the popup opens and fires its own opportunistic
+// cleanupUnnamed. Without serializing them, two overlapping calls can each
+// read the same pre-write snapshot and the second one's write clobbers the
+// first's (a classic lost update — the symptom was a container renamed
+// correctly but the session never showing up in the list). Every mutation
+// now goes through this queue so only one read-modify-write cycle for
+// `identities` is ever in flight at a time.
+let identitiesQueue = Promise.resolve();
+
+function withIdentities(mutator) {
+  const run = identitiesQueue.then(async () => {
+    const identities = await getIdentities();
+    const result = await mutator(identities);
+    await setIdentities(identities);
+    return result;
+  });
+  identitiesQueue = run.then(() => {}, () => {});
+  return run;
+}
+
+browser.contextualIdentities.onRemoved.addListener(({ contextualIdentity }) =>
+  withIdentities((identities) => { delete identities[contextualIdentity.cookieStoreId]; })
+);
 
 function randomColor() {
   return COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -160,31 +179,35 @@ async function handleMessage(msg, sender) {
     case "confirmIdentity": {
       const { cookieStoreId, name, notes, color } = msg;
       log("confirmIdentity", { cookieStoreId, name, notes, color });
-      const identities = await getIdentities();
-      const domain = identities[cookieStoreId]?.domain;
-      identities[cookieStoreId] = {
-        ...identities[cookieStoreId], name, notes, color, confirmed: true, lastUsedAt: Date.now()
-      };
-      await setIdentities(identities);
+      let domain;
+      await withIdentities((identities) => {
+        domain = identities[cookieStoreId]?.domain;
+        identities[cookieStoreId] = {
+          ...identities[cookieStoreId], name, notes, color, confirmed: true, lastUsedAt: Date.now()
+        };
+      });
       await renameContainer(cookieStoreId, domain, name, color);
       return { ok: true };
     }
 
     case "updateIdentity": {
-      const { cookieStoreId, name, notes, color } = msg;
-      const identities = await getIdentities();
-      const domain = identities[cookieStoreId]?.domain;
-      identities[cookieStoreId] = { ...identities[cookieStoreId], name, notes, color };
-      await setIdentities(identities);
-      await renameContainer(cookieStoreId, domain, name, color);
+      // domain is optional — omitted, it's left as-is (sidebar's own edit
+      // form only ever touches name/notes/color). When given, it lets a
+      // session be moved into a different group, e.g. merging a duplicate
+      // "account.proton.me" session into the "proton.me" one.
+      const { cookieStoreId, name, notes, color, domain } = msg;
+      let effectiveDomain;
+      await withIdentities((identities) => {
+        effectiveDomain = domain || identities[cookieStoreId]?.domain;
+        identities[cookieStoreId] = { ...identities[cookieStoreId], name, notes, color, domain: effectiveDomain };
+      });
+      await renameContainer(cookieStoreId, effectiveDomain, name, color);
       return { ok: true };
     }
 
     case "removeIdentity": {
       const { cookieStoreId } = msg;
-      const identities = await getIdentities();
-      delete identities[cookieStoreId];
-      await setIdentities(identities);
+      await withIdentities((identities) => { delete identities[cookieStoreId]; });
       try { await browser.contextualIdentities.remove(cookieStoreId); } catch {}
       return { ok: true };
     }
@@ -196,12 +219,12 @@ async function handleMessage(msg, sender) {
       const container = await browser.contextualIdentities.create({
         name: await containerName(domain, "Unnamed"), color, icon: "fingerprint"
       });
-      const identities = await getIdentities();
-      identities[container.cookieStoreId] = {
-        name: "", notes: "", color, domain, url,
-        confirmed: false, createdAt: Date.now(), lastUsedAt: Date.now()
-      };
-      await setIdentities(identities);
+      await withIdentities((identities) => {
+        identities[container.cookieStoreId] = {
+          name: "", notes: "", color, domain, url,
+          confirmed: false, createdAt: Date.now(), lastUsedAt: Date.now()
+        };
+      });
       const newTab = await browser.tabs.create({ url, cookieStoreId: container.cookieStoreId });
       await groupTabWithDomain(domain, newTab.id, newTab.windowId);
       return { ok: true, cookieStoreId: container.cookieStoreId };
@@ -212,35 +235,38 @@ async function handleMessage(msg, sender) {
       // got named. Run on-demand (popup open / sidebar expand) rather than
       // on a timer. Closes any tabs still open in those containers too —
       // except whichever tab triggered this cleanup, so we never yank the
-      // tab out from under whoever just opened the popup/sidebar.
+      // tab out from under whoever just opened the popup/sidebar. The
+      // decision of which sessions are still unconfirmed is made atomically
+      // with deleting them from storage (via withIdentities), so a
+      // same-moment confirmIdentity can never get silently undone by this.
       const { excludeCookieStoreId } = msg;
-      const identities = await getIdentities();
-      let removed = 0;
-      for (const [cookieStoreId, record] of Object.entries(identities)) {
-        if (record.confirmed || cookieStoreId === excludeCookieStoreId) continue;
+      const removedIds = await withIdentities((identities) => {
+        const ids = [];
+        for (const [cookieStoreId, record] of Object.entries(identities)) {
+          if (record.confirmed || cookieStoreId === excludeCookieStoreId) continue;
+          ids.push(cookieStoreId);
+          delete identities[cookieStoreId];
+        }
+        return ids;
+      });
+      for (const cookieStoreId of removedIds) {
         const staleTabs = await browser.tabs.query({ cookieStoreId });
         for (const t of staleTabs) {
           try { await browser.tabs.remove(t.id); } catch {}
         }
         try { await browser.contextualIdentities.remove(cookieStoreId); } catch {}
-        delete identities[cookieStoreId];
-        removed++;
       }
-      if (removed > 0) {
-        await setIdentities(identities);
-        log(`cleanupUnnamed: removed ${removed} abandoned pending session(s)`);
-      }
-      return { ok: true, removed };
+      if (removedIds.length > 0) log(`cleanupUnnamed: removed ${removedIds.length} abandoned pending session(s)`);
+      return { ok: true, removed: removedIds.length };
     }
 
     case "openIdentityTab": {
       const { cookieStoreId, url } = msg;
-      const identities = await getIdentities();
-      const domain = identities[cookieStoreId]?.domain;
-      if (identities[cookieStoreId]) {
-        identities[cookieStoreId].lastUsedAt = Date.now();
-        await setIdentities(identities);
-      }
+      let domain;
+      await withIdentities((identities) => {
+        domain = identities[cookieStoreId]?.domain;
+        if (identities[cookieStoreId]) identities[cookieStoreId].lastUsedAt = Date.now();
+      });
       const newTab = await browser.tabs.create({ url, cookieStoreId });
       if (domain) await groupTabWithDomain(domain, newTab.id, newTab.windowId);
       return { ok: true };
@@ -290,8 +316,8 @@ async function handleMessage(msg, sender) {
 
     case "importData": {
       const { data } = msg;
-      const identities = await getIdentities();
       let imported = 0, skipped = 0;
+      const newEntries = {};
 
       for (const [oldCookieStoreId, record] of Object.entries(data.identities || {})) {
         if (!record || !record.domain) { skipped++; continue; }
@@ -301,7 +327,7 @@ async function handleMessage(msg, sender) {
           color: record.color || randomColor(),
           icon: "fingerprint"
         });
-        identities[container.cookieStoreId] = {
+        newEntries[container.cookieStoreId] = {
           name: record.name || "", notes: record.notes || "", color: container.color,
           domain: record.domain, url: record.url, confirmed: record.confirmed !== false,
           createdAt: record.createdAt || Date.now()
@@ -316,7 +342,7 @@ async function handleMessage(msg, sender) {
         imported++;
       }
 
-      await setIdentities(identities);
+      await withIdentities((identities) => { Object.assign(identities, newEntries); });
       return { ok: true, imported, skipped };
     }
 
