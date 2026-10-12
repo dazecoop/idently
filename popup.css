@@ -233,5 +233,8 @@ body {
   padding-top: 12px;
   border-top: 1px solid var(--border);
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
+
+.btn.secondary:disabled { opacity: 0.45; cursor: default; }
+.btn.secondary:disabled:hover { background: var(--bg-subtle); color: var(--text-muted); }

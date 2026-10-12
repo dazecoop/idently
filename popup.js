@@ -40,6 +40,7 @@ async function init() {
   // never named, except whichever tab is currently active (never yank a
   // tab out from under the user while they're looking at it).
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  setupNewSessionButton(activeTab);
   browser.runtime.sendMessage({ action: "cleanupUnnamed", excludeCookieStoreId: activeTab?.cookieStoreId })
     .then(async (result) => {
       if (result?.removed) {
@@ -48,6 +49,27 @@ async function init() {
       }
     })
     .catch(() => {});
+}
+
+function setupNewSessionButton(activeTab) {
+  const btn = document.getElementById("newSessionBtn");
+  let domain = "", origin = "";
+  try {
+    const u = new URL(activeTab?.url || "");
+    domain = u.host;
+    origin = u.origin;
+  } catch {}
+
+  if (!domain) {
+    btn.disabled = true;
+    btn.title = "Can't start a session on this page";
+    return;
+  }
+
+  btn.addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "createNewIdentity", domain, origin });
+    window.close();
+  });
 }
 
 async function loadIdentities() {
