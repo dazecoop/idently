@@ -16,6 +16,7 @@
     close: `<svg ${SVG_ATTRS}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
     // Shown on an unnamed session: lit when a site rule is watching this
     // page and will name the session for you, unlit when nothing is.
+    edit: `<svg ${SVG_ATTRS}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
     rule: `<svg ${SVG_ATTRS}><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>`
   };
 
@@ -35,7 +36,7 @@
   // Size of the expanded naming form, and the easing both axes share. The
   // values are fixed because an auto size can't be animated to.
   const NOTCH_FORM_W = 272;
-  const NOTCH_FORM_H = 132;
+  const NOTCH_FORM_H = 192;
   const NOTCH_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
   // How close to dead centre a drag has to land before it snaps there.
   const NOTCH_SNAP = 26;
@@ -300,6 +301,13 @@
       collapsed.append(ruleIcon);
     }
 
+    if (named) {
+      collapsed.append(mkIconBtn("edit", "Edit name, colour and notes", () => {
+        if (notchDidDrag) { notchDidDrag = false; return; }
+        expandForm(current);
+      }));
+    }
+
     collapsed.append(mkIconBtn("close", "Hide until this page reloads", () => {
       if (notchDidDrag) { notchDidDrag = false; return; }
       badgeDismissed = true;
@@ -387,6 +395,17 @@
       if (e.key === "Enter") { e.preventDefault(); save(); }
     });
 
+    const notes = document.createElement("textarea");
+    notes.className = "badge-input badge-notes";
+    notes.maxLength = 280;
+    notes.rows = 2;
+    notes.placeholder = "Notes (optional)";
+    notes.value = current.notes || "";
+    // Enter inserts a newline in a textarea, so Cmd/Ctrl+Enter saves instead.
+    notes.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+    });
+
     const swatches = document.createElement("div");
     swatches.className = "badge-swatches";
     for (const color of COLORS) {
@@ -422,18 +441,22 @@
       if (!value) { input.focus(); return; }
       // Don't let the rule fire for this page load after a manual name.
       autoNameAttempted = true;
+      // An already-confirmed session is being edited, not named: updateIdentity
+      // leaves confirmed/lastUsedAt alone, where confirmIdentity would stamp
+      // them as if the session had just been created.
+      const action = current.confirmed ? "updateIdentity" : "confirmIdentity";
       try {
         await browser.runtime.sendMessage({
-          action: "confirmIdentity", cookieStoreId: ctx.cookieStoreId,
-          name: value, notes: current.notes || "", color: formColor
+          action, cookieStoreId: ctx.cookieStoreId,
+          name: value, notes: notes.value.trim(), color: formColor
         });
       } catch (e) {
-        logError("confirmIdentity from notch form failed:", e);
+        logError(`${action} from notch form failed:`, e);
       }
       collapseForm(false);
     }
 
-    form.append(input, swatches, actions);
+    form.append(input, notes, swatches, actions);
     return form;
   }
 
@@ -817,16 +840,17 @@
     /* Shown mid-drag while the notch is sitting in the centre snap zone. */
     .badge.badge--snapped { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)) brightness(1.35); }
 
+    /* Always visible, not hover-revealed: the notch is small enough that
+       hunting for a control that only appears on hover costs more than the
+       two icons cost in space. */
     .icon-btn {
-      border: none; background: transparent; color: #9a9a9e; cursor: pointer;
+      border: none; background: transparent; color: #7c7c86; cursor: pointer;
       padding: 3px; border-radius: 6px; display: inline-flex;
       align-items: center; justify-content: center;
-      opacity: 0;
-      transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+      transition: background 0.12s ease, color 0.12s ease;
     }
     .icon-btn svg { width: 11px; height: 11px; }
     .icon-btn:hover { background: #333338; color: #fff; }
-    .badge:hover .icon-btn { opacity: 1; }
 
     .badge-main {
       position: relative;
@@ -885,6 +909,8 @@
     }
     .badge-input::placeholder { color: #6b6b74; }
     .badge-input:focus { outline: none; border-color: #5b5bd6; }
+
+    .badge-notes { resize: none; line-height: 1.35; }
 
     .badge-swatches { display: flex; gap: 6px; }
     .badge-swatch {

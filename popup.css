@@ -141,7 +141,7 @@ body {
 .identity-row:hover { background: var(--bg-subtle); }
 .identity-row.selected { background: var(--accent); }
 .identity-row.selected .identity-name,
-.identity-row.selected .identity-domain,
+.identity-row.selected .identity-meta,
 .identity-row.selected .identity-notes { color: var(--accent-text); }
 .identity-row.selected .icon-btn { color: var(--accent-text); opacity: 0.85; }
 .identity-row.stale .dot { opacity: 0.35; }
@@ -149,8 +149,18 @@ body {
 
 .identity-info { flex: 1; min-width: 0; cursor: pointer; }
 .identity-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.identity-notes { font-size: 11px; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.identity-domain { font-size: 10px; color: var(--text-muted); margin-top: 1px; white-space: nowrap; }
+.identity-meta {
+  font-size: 10px; color: var(--text-muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Notes wrap to two lines before clamping — a note is written to be read,
+   and one ellipsised line showed almost none of it. */
+.identity-notes {
+  font-size: 11px; color: var(--text-muted); margin-top: 3px;
+  line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 
 .identity-actions {
   display: flex;

@@ -286,17 +286,27 @@ function buildIdentityRow(id, data, showDomain, selected) {
 
   const loggedOut = sessionHealth[id] === false;
   if (loggedOut) row.classList.add("stale");
-  const parts = [];
-  if (showDomain) parts.push(data.domain);
-  if (data.notes) parts.push(data.notes);
+
+  // Domain/time/status stay on one compact line. Notes used to be crammed in
+  // alongside them and were truncated into nothing; they get their own line.
+  const meta = [];
+  if (showDomain) meta.push(data.domain);
   const ago = timeAgo(data.lastUsedAt || data.createdAt);
-  if (ago) parts.push(ago);
-  if (loggedOut) parts.push("logged out");
-  if (parts.length) {
+  if (ago) meta.push(ago);
+  if (loggedOut) meta.push("logged out");
+  if (meta.length) {
     const sub = document.createElement("div");
-    sub.className = showDomain ? "identity-domain" : "identity-notes";
-    sub.textContent = parts.join(" · ");
+    sub.className = "identity-meta";
+    sub.textContent = meta.join(" · ");
     info.appendChild(sub);
+  }
+
+  if (data.notes) {
+    const notes = document.createElement("div");
+    notes.className = "identity-notes";
+    notes.textContent = data.notes;
+    notes.title = data.notes; // the clamp can still hide a long note
+    info.appendChild(notes);
   }
 
   const actions = document.createElement("div");
@@ -321,6 +331,17 @@ function mkIconBtn(icon, title, onClick, danger) {
   return btn;
 }
 
+// Matches across name, domain and notes together, so "resend" finds the
+// sessions on resend.com even though the name is only an email address.
+// Every term has to hit something, which makes a multi-word query narrow
+// rather than widen: "resend hello" matches the resend.com session named
+// hello@…, not every session on either side.
+function matchesSearch(data, terms) {
+  const haystack = [data.name, data.domain, data.notes]
+    .filter(Boolean).join(" ").toLowerCase();
+  return terms.every((t) => haystack.includes(t));
+}
+
 function onSearch() {
   const query = document.getElementById("searchInput").value.trim().toLowerCase();
   const groupsView = document.getElementById("groupsView");
@@ -337,9 +358,10 @@ function onSearch() {
   groupsView.classList.add("hidden");
   searchView.classList.remove("hidden");
 
-  const matches = Object.entries(identities).filter(([, v]) =>
-    v.confirmed && (v.name.toLowerCase().includes(query) || (v.notes || "").toLowerCase().includes(query))
-  ).sort(byRecency);
+  const terms = query.split(/\s+/).filter(Boolean);
+  const matches = Object.entries(identities)
+    .filter(([, v]) => v.confirmed && matchesSearch(v, terms))
+    .sort(byRecency);
   currentResults = matches;
   selectedIndex = matches.length > 0 ? 0 : -1;
   renderResultRows(matches, `Results for "${query}"`);
