@@ -155,7 +155,32 @@ function confirmedByDomain() {
   return byDomain;
 }
 
+// How many recents to show, and the point at which showing them is worth the
+// space: below this the groups list is short enough to scan whole, and a
+// recents list would just repeat it back.
+const RECENT_COUNT = 5;
+const RECENT_MIN_SESSIONS = 6;
+
+function renderRecent() {
+  const section = document.getElementById("recentSection");
+  const listEl = document.getElementById("recentList");
+  listEl.innerHTML = "";
+
+  const confirmed = Object.entries(identities).filter(([, data]) => data.confirmed);
+  if (confirmed.length < RECENT_MIN_SESSIONS) {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+
+  for (const [id, data] of confirmed.sort(byRecency).slice(0, RECENT_COUNT)) {
+    // Domains are mixed in here, so each row says which site it belongs to.
+    listEl.appendChild(buildIdentityRow(id, data, true));
+  }
+}
+
 function renderGroups() {
+  renderRecent();
   const listEl = document.getElementById("groupsList");
   const emptyEl = document.getElementById("groupsEmpty");
   listEl.innerHTML = "";
@@ -171,6 +196,24 @@ function renderGroups() {
   const domainsByRecency = [...byDomain.entries()].sort((a, b) => byRecency(a[1][0], b[1][0]));
   for (const [domain, rows] of domainsByRecency) {
     listEl.appendChild(buildGroup(domain, rows));
+  }
+}
+
+// Height can't transition to or from `auto`, so both directions go via the
+// measured pixel height: expanding animates 0 -> Npx then releases to auto
+// (so the group still grows if a session is added while it's open), and
+// collapsing pins Npx for a frame before animating down to 0.
+function animateGroupHeight(wrap, expanding) {
+  const target = wrap.scrollHeight;
+  clearTimeout(wrap._heightTimer);
+  if (expanding) {
+    wrap.style.height = target + "px";
+    wrap._heightTimer = setTimeout(() => {
+      if (wrap.parentElement?.classList.contains("expanded")) wrap.style.height = "auto";
+    }, 240);
+  } else {
+    wrap.style.height = target + "px";
+    requestAnimationFrame(() => requestAnimationFrame(() => { wrap.style.height = "0px"; }));
   }
 }
 
@@ -199,9 +242,11 @@ function buildGroup(domain, rows) {
   count.textContent = rows.length;
   header.append(chevron, name, dots, count);
   header.addEventListener("click", () => {
-    if (expandedGroups.has(domain)) expandedGroups.delete(domain);
-    else expandedGroups.add(domain);
-    group.classList.toggle("expanded");
+    const expanding = !expandedGroups.has(domain);
+    if (expanding) expandedGroups.add(domain);
+    else expandedGroups.delete(domain);
+    group.classList.toggle("expanded", expanding);
+    animateGroupHeight(childrenWrap, expanding);
   });
 
   const childrenWrap = document.createElement("div");
@@ -209,7 +254,7 @@ function buildGroup(domain, rows) {
   const childrenInner = document.createElement("div");
   childrenInner.className = "group-children-inner";
   const list = document.createElement("div");
-  list.className = "list";
+  list.className = "rows";
 
   for (const [id, data] of rows) {
     list.appendChild(buildIdentityRow(id, data, false));
@@ -217,6 +262,9 @@ function buildGroup(domain, rows) {
 
   childrenInner.appendChild(list);
   childrenWrap.appendChild(childrenInner);
+  // A group that was already open when this list was rebuilt opens at its
+  // natural height with no animation — only a click should animate.
+  childrenWrap.style.height = expandedGroups.has(domain) ? "auto" : "0px";
   group.append(header, childrenWrap);
   return group;
 }

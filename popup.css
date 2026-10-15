@@ -118,7 +118,16 @@ body {
   margin: 2px 2px 8px;
 }
 
-.list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+/* A plain stack of session rows, used by search results, the recents list and
+   each group's children. flex-shrink: 0 matters wherever it's inside
+   something with a max-height: a column flex container shrinks its items to
+   fit rather than overflowing, which squashed the last rows instead of
+   letting the list scroll to them. */
+.rows { display: flex; flex-direction: column; gap: 2px; }
+.rows > .identity-row { flex-shrink: 0; }
+
+/* ...and the scrolling variant, for search results. */
+.list { max-height: 260px; overflow-y: auto; }
 
 .identity-row {
   display: flex;
@@ -162,8 +171,25 @@ body {
 }
 .empty-state.hidden { display: none; }
 
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 6px 2px;
+}
+.recent-section { margin-bottom: 14px; }
+.recent-section.hidden { display: none; }
+
 /* Domain accordion */
-.groups { display: flex; flex-direction: column; gap: 3px; max-height: 330px; overflow-y: auto; }
+/* Deliberately a block, not a column flex container. An expanded group sizes
+   itself with the grid 0fr/1fr trick, and an `fr` resolves against AVAILABLE
+   space — inside a flex item under this max-height, "available" became the
+   330px viewport, so a long group's rows were capped at that and clipped by
+   .group-children-inner's overflow. In a block container the group's height
+   is indefinite, 1fr resolves to the content height, and this list overflows
+   and scrolls as intended. */
+.groups { display: block; max-height: 330px; overflow-y: auto; }
+.groups > .group + .group { margin-top: 3px; }
 
 .group {
   border-radius: var(--radius);
@@ -213,20 +239,23 @@ body {
   flex-shrink: 0;
 }
 
-/* Animated auto-height expand via the CSS grid 0fr/1fr trick */
+/* Animated expand. The height is measured and set in JS (see setGroupHeight)
+   rather than done with the CSS grid 0fr/1fr trick: an `fr` resolves against
+   AVAILABLE space, so under .groups' max-height a long group capped itself at
+   the visible 330px and clipped the rest — with nothing overflowing, there
+   was no scrollbar to reach the hidden rows. An explicit pixel height has no
+   such ceiling, and reverts to `auto` once the animation finishes so the
+   group keeps sizing itself as sessions come and go. */
 .group-children-wrap {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.22s ease;
-}
-.group.expanded .group-children-wrap { grid-template-rows: 1fr; }
-
-.group-children-inner {
+  height: 0;
   overflow: hidden;
-  min-height: 0;
-  padding: 0 6px;
+  transition: height 0.22s ease;
 }
-.group.expanded .group-children-inner { padding-bottom: 6px; }
+
+.group-children-inner { padding: 0 6px 6px; }
+
+/* The group's rows use the un-capped .rows, never .list — a nested scroll
+   area inside .groups would mean two scrollbars for one list. */
 
 .footer {
   margin-top: 14px;
