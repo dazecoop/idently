@@ -121,6 +121,31 @@
     <section class="section">
       <div class="section-head">
         <div>
+          <h2>Recover containers</h2>
+          <p class="section-desc">
+            Firefox containers outlive the extension — reinstalling clears Idently's
+            session list but leaves the containers and their logins intact. Scan for
+            containers Idently isn't tracking and adopt them back.
+          </p>
+        </div>
+        <div class="section-head-actions">
+          <button class="btn secondary" id="scanContainersBtn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+            Scan
+          </button>
+        </div>
+      </div>
+      <div id="orphanStatus" class="rules-backup-status"></div>
+      <div id="orphanList" class="orphan-list"></div>
+      <div id="orphanActions" class="orphan-actions hidden">
+        <button class="btn secondary" id="orphanSelectAllBtn">Select all</button>
+        <button class="btn primary" id="adoptContainersBtn">Import selected</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
           <h2>Backup</h2>
           <p class="section-desc">
             Export your sessions to a JSON file, or restore them into another profile or machine.

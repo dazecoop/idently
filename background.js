@@ -115,6 +115,24 @@ async function containerName(domain, name) {
 // rejection buried in page noise, leaving storage saying "confirmed" while
 // the real Firefox container still showed its old name. This wraps it,
 // logs loudly on failure, and verifies the rename actually took.
+// The inverse of containerName(): containers are named "<prefix> - <name>",
+// where the prefix is normally the domain but is a site rule's shortLabel
+// when one applies (e.g. "CF - me@example.com"). Splitting on the FIRST
+// " - " matters — session names can themselves contain " - ".
+function parseContainerName(containerName, rules) {
+  const raw = containerName || "";
+  const sep = raw.indexOf(" - ");
+  if (sep === -1) return { domain: "", name: raw.trim() };
+
+  const prefix = raw.slice(0, sep).trim();
+  const name = raw.slice(sep + 3).trim();
+  const byShortLabel = rules.find((r) => r.shortLabel && r.shortLabel === prefix);
+  const domain = byShortLabel ? byShortLabel.domain : prefix;
+  // "Unnamed" is what containerName() writes for a session the user never
+  // got around to naming; it's a placeholder, not a name worth restoring.
+  return { domain, name: name === "Unnamed" ? "" : name };
+}
+
 async function renameContainer(cookieStoreId, domain, name, color) {
   const newName = await containerName(domain, name);
   try {
@@ -319,6 +337,70 @@ async function handleMessage(msg, sender) {
         }
       }
       return health;
+    }
+
+    // Firefox containers outlive the extension: uninstalling wipes
+    // storage.local (and with it every identity record) while leaving the
+    // actual containers, and their cookies, in place. These two actions let
+    // Settings adopt those orphans back instead of the sessions being lost.
+    case "listOrphanContainers": {
+      const identities = await getIdentities();
+      const rules = await getSiteRules();
+      const containers = await browser.contextualIdentities.query({});
+      const orphans = [];
+
+      for (const c of containers) {
+        if (identities[c.cookieStoreId]) continue;
+        let cookieCount = 0;
+        try {
+          cookieCount = (await browser.cookies.getAll({ storeId: c.cookieStoreId })).length;
+        } catch {}
+        orphans.push({
+          cookieStoreId: c.cookieStoreId,
+          containerName: c.name,
+          color: c.color,
+          cookieCount,
+          ...parseContainerName(c.name, rules)
+        });
+      }
+      return { orphans };
+    }
+
+    case "adoptContainers": {
+      const { adoptions } = msg;
+      let imported = 0, skipped = 0;
+      const applied = [];
+
+      await withIdentities((identities) => {
+        for (const { cookieStoreId, domain, name, color: wanted } of adoptions || []) {
+          const url = webUrl(`https://${(domain || "").trim()}/`);
+          // No usable domain means nothing to group or open the session
+          // against, and an already-tracked container isn't an orphan.
+          if (!url || identities[cookieStoreId]) { skipped++; continue; }
+          // Keep the container's own Firefox color where it's one we use;
+          // "toolbar" and anything unrecognized fall back to a random one.
+          const color = COLORS.includes(wanted) ? wanted : randomColor();
+          identities[cookieStoreId] = {
+            name: (name || "").trim(), notes: "", color, domain: domain.trim(), url,
+            // Adopted sessions are confirmed by definition: the user picked
+            // them deliberately. Leaving this false would hand them straight
+            // to cleanupUnnamed, which deletes unconfirmed sessions AND
+            // their containers on the next popup open.
+            confirmed: true, createdAt: Date.now(), lastUsedAt: Date.now()
+          };
+          applied.push({ cookieStoreId, domain: domain.trim(), name: (name || "").trim(), color });
+          imported++;
+        }
+      });
+
+      // Renamed outside the storage mutation: contextualIdentities.update is
+      // slow enough that holding the identities queue across it would stall
+      // every other session write.
+      for (const a of applied) {
+        await renameContainer(a.cookieStoreId, a.domain, a.name, a.color);
+      }
+      log(`adoptContainers: imported ${imported}, skipped ${skipped}`);
+      return { ok: true, imported, skipped };
     }
 
     case "exportData": {

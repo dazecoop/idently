@@ -30,6 +30,9 @@ async function init() {
   document.getElementById("exportRulesBtn").addEventListener("click", exportRules);
   document.getElementById("importRulesBtn").addEventListener("click", () => document.getElementById("importRulesFile").click());
   document.getElementById("importRulesFile").addEventListener("change", importRules);
+  document.getElementById("scanContainersBtn").addEventListener("click", scanContainers);
+  document.getElementById("orphanSelectAllBtn").addEventListener("click", toggleSelectAllOrphans);
+  document.getElementById("adoptContainersBtn").addEventListener("click", adoptContainers);
 
   // Rules can also be created from the popup's "Create rule for this site"
   // window, which may well be open at the same time as this page — reflect
@@ -47,6 +50,135 @@ async function init() {
       sidebarCheck.checked = changes.showSidebar.newValue !== false;
     }
   });
+}
+
+// --- Recover containers -------------------------------------------------
+// Containers are a browser-level thing and survive the extension being
+// removed and reinstalled, but the identity records that describe them live
+// in storage.local and don't. This adopts those orphans back: the domain and
+// name are guessed from the container's own name, and shown in editable
+// fields because the guess can be wrong (a container made by hand, or whose
+// site rule prefix no longer resolves).
+
+function setOrphanStatus(text) {
+  document.getElementById("orphanStatus").textContent = text;
+}
+
+async function scanContainers() {
+  setOrphanStatus("Scanning…");
+  const listEl = document.getElementById("orphanList");
+  const actionsEl = document.getElementById("orphanActions");
+  listEl.innerHTML = "";
+
+  const { orphans } = await browser.runtime.sendMessage({ action: "listOrphanContainers" });
+
+  if (!orphans || orphans.length === 0) {
+    actionsEl.classList.add("hidden");
+    setOrphanStatus("No untracked containers found — every Firefox container is already a session.");
+    return;
+  }
+
+  for (const o of orphans) {
+    listEl.appendChild(orphanRow(o));
+  }
+  actionsEl.classList.remove("hidden");
+  const n = orphans.length;
+  setOrphanStatus(`Found ${n} untracked container${n === 1 ? "" : "s"}. Check the domain on each, then import.`);
+}
+
+function orphanRow(o) {
+  const row = document.createElement("div");
+  row.className = "orphan-row";
+  row.dataset.cookieStoreId = o.cookieStoreId;
+  row.dataset.color = o.color || "";
+
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.className = "orphan-check";
+  // Default to importing the ones we could read a domain out of; a row we
+  // couldn't parse needs a decision, so don't pre-tick it.
+  check.checked = !!o.domain;
+
+  const origin = document.createElement("div");
+  origin.className = "orphan-origin";
+  origin.title = o.containerName;
+  origin.textContent = o.containerName || "(unnamed container)";
+  if (o.cookieCount) {
+    const badge = document.createElement("span");
+    badge.className = "rule-badge orphan-cookies";
+    badge.textContent = `${o.cookieCount} cookie${o.cookieCount === 1 ? "" : "s"}`;
+    origin.appendChild(badge);
+  }
+
+  const fields = document.createElement("div");
+  fields.className = "orphan-fields";
+
+  const domainInput = document.createElement("input");
+  domainInput.type = "text";
+  domainInput.className = "orphan-domain";
+  domainInput.placeholder = "domain (required)";
+  domainInput.maxLength = 200;
+  domainInput.value = o.domain || "";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.className = "orphan-name";
+  nameInput.placeholder = "session name";
+  nameInput.maxLength = 60;
+  nameInput.value = o.name || "";
+
+  fields.append(domainInput, nameInput);
+
+  // A domain with no dot is almost certainly a mis-parse — usually a site
+  // rule prefix like "CF" whose rule is gone. Flag it rather than block it,
+  // since single-label intranet hosts are legitimate.
+  const flagSuspect = () => {
+    const v = domainInput.value.trim();
+    row.classList.toggle("suspect", !!v && !v.includes(".") && !v.startsWith("localhost"));
+  };
+  domainInput.addEventListener("input", flagSuspect);
+  flagSuspect();
+
+  row.append(check, origin, fields);
+  return row;
+}
+
+function toggleSelectAllOrphans() {
+  const checks = [...document.querySelectorAll(".orphan-check")];
+  const target = !checks.every((c) => c.checked);
+  for (const c of checks) c.checked = target;
+}
+
+async function adoptContainers() {
+  const adoptions = [];
+  let missingDomain = 0;
+
+  for (const row of document.querySelectorAll(".orphan-row")) {
+    if (!row.querySelector(".orphan-check").checked) continue;
+    const domain = row.querySelector(".orphan-domain").value.trim();
+    if (!domain) { missingDomain++; continue; }
+    adoptions.push({
+      cookieStoreId: row.dataset.cookieStoreId,
+      domain,
+      name: row.querySelector(".orphan-name").value.trim(),
+      color: row.dataset.color
+    });
+  }
+
+  if (adoptions.length === 0) {
+    setOrphanStatus(missingDomain ? "Nothing imported — a domain is required for each container." : "Nothing selected.");
+    return;
+  }
+
+  setOrphanStatus("Importing…");
+  const result = await browser.runtime.sendMessage({ action: "adoptContainers", adoptions });
+  const bits = [`Imported ${result.imported} session${result.imported === 1 ? "" : "s"}`];
+  if (result.skipped) bits.push(`skipped ${result.skipped}`);
+  if (missingDomain) bits.push(`${missingDomain} left out with no domain`);
+  // Re-scan first so adopted rows drop off the list and can't be imported
+  // twice, then report — scanContainers() writes the status itself.
+  await scanContainers();
+  setOrphanStatus(`${bits.join(", ")}. Open the popup to see them.`);
 }
 
 // --- Site rules export / import -----------------------------------------
