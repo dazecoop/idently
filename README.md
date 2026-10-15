@@ -111,30 +111,6 @@ npm run build      # -> dist/idently-firefox-v<version>.zip, for addons.mozilla.
 The zip holds only the extension's own files, not `docs/`, `scripts/` or
 `store-assets/`.
 
-### Store screenshots
-
-```
-npm install
-npm run store-assets
-```
-
-This regenerates the five 1280×800 listing screenshots in
-`store-assets/firefox/`, the social preview in `store-assets/`, and the preview
-images in `docs/`. It runs two steps, which can also be run on their own:
-
-- `scripts/capture.js` loads the real `popup.html`, `options.html`,
-  `rulebuilder.html` and `content.js` from this repo in headless Chromium, with
-  `scripts/lib/browser-mock.js` standing in for Firefox's `browser.*` API, and
-  writes raw screenshots to `scripts/output/`. The sessions, sites and accounts
-  come from `scripts/lib/fixtures.js` and are all made up, so a capture never
-  shows real logins. The site the notch sits on is `scripts/lib/demo-site.html`.
-- `scripts/compose-slides.js` frames those captures with the headline copy in
-  `scripts/lib/slide-template.html`: a drawn Firefox window with container tabs,
-  the toolbar popup and a magnifier on the notch. The copy for each slide is in
-  the `SLIDES` list at the top of the script.
-
-The listing text is in `store-assets/firefox/description.md`.
-
 ### Docs site
 
 `docs/` is the GitHub Pages site (Settings → Pages → deploy from the `main`
