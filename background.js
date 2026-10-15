@@ -5,6 +5,21 @@ const ERR_STYLE = "background:#dc2626;color:#fff;padding:2px 6px;border-radius:4
 const log = (...args) => console.log("%c[Idently][background]", STYLE, ...args);
 const logError = (...args) => console.error("%c[Idently][background] ERROR", ERR_STYLE, ...args);
 
+// Normalizes a candidate session URL, returning null for anything that isn't
+// a real web page. moz-extension:// URLs are the ones that actually bite:
+// they parse cleanly and have a non-empty host (the extension uuid), so they
+// slip past a naive check and open the extension's own file listing.
+function webUrl(candidate) {
+  try {
+    const u = new URL(candidate || "");
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.host) return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
 async function getIdentities() {
   const { identities = {} } = await browser.storage.local.get("identities");
   return identities;
@@ -214,7 +229,12 @@ async function handleMessage(msg, sender) {
 
     case "createNewIdentity": {
       const { domain, origin } = msg;
-      const url = `${origin || "https://" + domain}/`;
+      const url = webUrl(origin ? `${origin}/` : `https://${domain}/`);
+      // Guard against a caller handing us a non-web page (the extension's
+      // own options tab, about:*, file:, ...). Creating a container for one
+      // leaves a junk session behind and opens the extension's file listing
+      // in a new tab, which is just confusing.
+      if (!url) return { ok: false, error: "not a web page" };
       const color = randomColor();
       const container = await browser.contextualIdentities.create({
         name: await containerName(domain, "Unnamed"), color, icon: "fingerprint"
@@ -267,7 +287,12 @@ async function handleMessage(msg, sender) {
         domain = identities[cookieStoreId]?.domain;
         if (identities[cookieStoreId]) identities[cookieStoreId].lastUsedAt = Date.now();
       });
-      const newTab = await browser.tabs.create({ url, cookieStoreId });
+      // Sessions created before the non-web-page guard landed can have a
+      // moz-extension:// url stored against them; fall back to the domain
+      // so opening one of those lands on the site, not the file listing.
+      const safeUrl = webUrl(url) || (domain ? webUrl(`https://${domain}/`) : null);
+      if (!safeUrl) return { ok: false, error: "not a web page" };
+      const newTab = await browser.tabs.create({ url: safeUrl, cookieStoreId });
       if (domain) await groupTabWithDomain(domain, newTab.id, newTab.windowId);
       return { ok: true };
     }

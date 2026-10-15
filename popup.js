@@ -16,6 +16,24 @@ const COLORS = Object.keys(COLOR_HEX).filter((c) => c !== "toolbar");
 const STYLE = "background:#5b5bd6;color:#fff;padding:2px 6px;border-radius:4px;font-weight:bold;";
 const log = (...args) => console.log("%c[Idently][popup]", STYLE, ...args);
 
+// Only http(s) pages can host a session. Anything else — about:*, file:,
+// view-source:, and in particular the extension's own pages (the options
+// tab, the rule builder window) — has to be rejected explicitly: a URL like
+// "moz-extension://<uuid>/options.html" parses just fine and yields a
+// non-empty host (the uuid), so a bare `new URL(...).host` check passes it
+// through and we end up opening moz-extension://<uuid>/ — the extension's
+// raw file listing — in a brand new tab.
+function webPageParts(tabUrl) {
+  try {
+    const u = new URL(tabUrl || "");
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.host) return null;
+    return { domain: u.host, origin: u.origin };
+  } catch {
+    return null;
+  }
+}
+
 let identities = {};
 let currentResults = [];
 let selectedIndex = -1;
@@ -66,16 +84,19 @@ async function init() {
 
 function setupNewSessionButton(activeTab) {
   const btn = document.getElementById("newSessionBtn");
-  let domain = "", origin = "";
-  try {
-    const u = new URL(activeTab?.url || "");
-    domain = u.host;
-    origin = u.origin;
-  } catch {}
+  const parts = webPageParts(activeTab?.url);
+  const domain = parts?.domain || "", origin = parts?.origin || "";
 
   if (!domain) {
+    // A disabled button with no explanation reads as a broken one, so say
+    // what's missing. Sessions are always created for the active tab's site,
+    // and the active tab here isn't a site (new tab, Settings, about:*, ...).
+    const reason = "Open a site in this tab first, then start a session.";
     btn.disabled = true;
-    btn.title = "Can't start a session on this page";
+    btn.title = reason;
+    const hint = document.getElementById("newSessionHint");
+    hint.textContent = reason;
+    hint.classList.remove("hidden");
     return;
   }
 
@@ -342,8 +363,7 @@ function setupMoreMenu() {
   const createItem = document.getElementById("createRuleMenuItem");
   const settingsItem = document.getElementById("settingsMenuItem");
 
-  let domain = "";
-  try { domain = new URL(activeTab?.url || "").host; } catch {}
+  const domain = webPageParts(activeTab?.url)?.domain || "";
   if (!domain) {
     createItem.disabled = true;
     createItem.title = "Can't create a rule for this page";

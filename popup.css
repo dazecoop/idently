@@ -243,6 +243,17 @@ body {
 .btn.secondary:disabled { opacity: 0.45; cursor: default; }
 .btn.secondary:disabled:hover { background: var(--bg-subtle); color: var(--text-muted); }
 
+/* Explains a disabled "New session tab" button. flex-basis forces it onto its
+   own line below the footer's button row rather than squeezing in beside it. */
+.footer-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.footer-hint.hidden { display: none; }
+
 /* Session edit panel */
 #sessionEditView.hidden { display: none; }
 
