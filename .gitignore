@@ -11,3 +11,6 @@ scripts/compose-slides.js
 scripts/demo-page.html
 scripts/lib/
 scripts/output/
+
+# Film output and temporary files
+film
