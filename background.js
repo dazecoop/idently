@@ -62,7 +62,8 @@ function randomColor() {
 
 // Site rules are user-editable data (see the extension's Settings page).
 // Each rule: { id, label, domain, pathPrefix, selectorType, selector,
-// readFrom, pattern, shortLabel }. The sidebar uses them for auto-naming; here the
+// readFrom, pattern, shortLabel }. The content script uses them for
+// auto-naming; here the
 // optional shortLabel shortens the native container name's domain prefix
 // (purely cosmetic — what you see in about:preferences#containers).
 const DEFAULT_SITE_RULES = [
@@ -224,8 +225,7 @@ async function handleMessage(msg, sender) {
     }
 
     case "updateIdentity": {
-      // domain is optional — omitted, it's left as-is (sidebar's own edit
-      // form only ever touches name/notes/color). When given, it lets a
+      // domain is optional — omitted, it's left as-is. When given, it lets a
       // session be moved into a different group, e.g. merging a duplicate
       // "account.proton.me" session into the "proton.me" one.
       const { cookieStoreId, name, notes, color, domain } = msg;
@@ -270,10 +270,10 @@ async function handleMessage(msg, sender) {
 
     case "cleanupUnnamed": {
       // Housekeeping for abandoned "+ New session tab" clicks that never
-      // got named. Run on-demand (popup open / sidebar expand) rather than
+      // got named. Run on-demand (popup open) rather than
       // on a timer. Closes any tabs still open in those containers too —
       // except whichever tab triggered this cleanup, so we never yank the
-      // tab out from under whoever just opened the popup/sidebar. The
+      // tab out from under whoever just opened the popup. The
       // decision of which sessions are still unconfirmed is made atomically
       // with deleting them from storage (via withIdentities), so a
       // same-moment confirmIdentity can never get silently undone by this.

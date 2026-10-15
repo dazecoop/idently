@@ -10,15 +10,15 @@ let editingId = null;
 init();
 
 async function init() {
-  const { siteRules, showSidebar } = await browser.storage.sync.get(["siteRules", "showSidebar"]);
+  const { siteRules, showNameBadge } = await browser.storage.sync.get(["siteRules", "showNameBadge"]);
   rules = Array.isArray(siteRules) ? siteRules : [];
   renderRules();
 
-  const sidebarCheck = document.getElementById("showSidebarCheck");
-  sidebarCheck.checked = showSidebar !== false; // default true
-  sidebarCheck.addEventListener("change", async () => {
-    await browser.storage.sync.set({ showSidebar: sidebarCheck.checked });
-    setStatus(sidebarCheck.checked ? "Sidebar enabled." : "Sidebar hidden on all pages.");
+  const badgeCheck = document.getElementById("showNameBadgeCheck");
+  badgeCheck.checked = showNameBadge !== false; // default true
+  badgeCheck.addEventListener("change", async () => {
+    await browser.storage.sync.set({ showNameBadge: badgeCheck.checked });
+    setStatus(badgeCheck.checked ? "Session name shown on the page." : "Session name hidden on pages.");
   });
 
   document.getElementById("addRuleBtn").addEventListener("click", () => openForm(null));
@@ -46,8 +46,8 @@ async function init() {
       }
       renderRules();
     }
-    if (changes.showSidebar) {
-      sidebarCheck.checked = changes.showSidebar.newValue !== false;
+    if (changes.showNameBadge) {
+      badgeCheck.checked = changes.showNameBadge.newValue !== false;
     }
   });
 }
