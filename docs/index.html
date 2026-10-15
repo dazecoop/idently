@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idently — Multi-account sessions for Firefox</title>
+<meta name="description" content="A free, open source Firefox extension: stay signed in to the same site as many accounts at once, each in its own named, colour-coded session. Local-only, no account.">
+<link rel="icon" href="icon32.png" type="image/png">
+<link rel="canonical" href="https://dazecoop.github.io/idently/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Idently — Multi-account sessions for Firefox">
+<meta property="og:description" content="Stay signed in to the same site as many accounts at once, each in its own named, colour-coded session. Free, open source, local-only.">
+<meta property="og:url" content="https://dazecoop.github.io/idently/">
+<meta property="og:image" content="https://dazecoop.github.io/idently/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a class="brand" href="./">
+    <img src="icon32.png" alt="" width="32" height="32">
+    <span>Idently</span>
+  </a>
+  <nav>
+    <a href="./" aria-current="page">Overview</a>
+    <a href="support.html">Support</a>
+    <a href="privacy.html">Privacy</a>
+  </nav>
+</header>
+
+<main>
+<h1>Multi-account sessions for Firefox</h1>
+
+<p class="lede">A free, open source Firefox extension for people who sign in to the same
+site as several different accounts: clients, test users, admin and personal.
+Each login gets its own named, colour-coded session in its own tab, and a small
+notch on the page always tells you which one you're in.</p>
+
+<img class="hero" src="social-preview.png" width="1600" height="800"
+     alt="Firefox with three Pinecrest tabs, each underlined in a different container colour, and the Idently popup listing sessions grouped by site, each with a name, a coloured dot and a note.">
+<p class="caption">Three accounts on one site, side by side, each in its own tab.</p>
+
+<p>Click <strong>New session tab</strong> on any site and Idently opens it in a fresh
+Firefox container, a separate cookie jar, so you can sign in as someone else
+without signing out of anything. Name it, give it a colour and a note, and it's
+one click away from then on. There is no account, no server and no tracking.</p>
+
+<ul class="pills">
+  <li>Many logins per site</li>
+  <li>No account needed</li>
+  <li>Local-only</li>
+  <li>No tracking</li>
+  <li>MIT licensed</li>
+</ul>
+
+<p class="store">
+  <a href="https://addons.mozilla.org/firefox/addon/idently/">
+    <img src="firefox-add-ons-badge.png" width="248" height="70"
+         alt="Get the add-on for Firefox">
+  </a>
+</p>
+<p class="caption">Firefox 139 or later. Loading it from source is covered in the
+<a href="https://github.com/dazecoop/idently#install">README</a>.</p>
+
+<h2>Built for fifteen accounts, not three</h2>
+<p>Say you look after fifteen clients, and each has its own login on the same
+dashboard. With Idently that's fifteen sessions on one site, each one named
+after the email it signs in with: <code>jo@brightside.co</code>,
+<code>accounts@mossandco.com</code>, <code>admin@harbourdental.nz</code>, and so on.
+Sign in once and the session names itself. Next week, type <code>harbour</code> into
+the popup and press Enter, and you're back in that client's account in a new
+tab, with the notch confirming it.</p>
+
+<h2>Every account, its own tab</h2>
+<p>Each session is a Firefox container: its own cookies, its own local storage,
+its own login. Open the same site in three sessions and you're three different
+people in three tabs. Sessions are grouped by site in the popup and on Firefox's
+tab strip, and the most recent ones are listed first.</p>
+
+<h2>Always know which account you're in</h2>
+<p>A small notch hangs from the top of every page that belongs to a session,
+showing its name and colour. It's there so you never post, pay or delete as the
+wrong account. Click it to copy the name. Option-drag it along the top edge if
+it covers something, and close it for the rest of that page load if you need to.</p>
+
+<img class="hero" src="preview-notch.png" width="1600" height="800" loading="lazy"
+     alt="A Pinecrest dashboard with the Idently notch at the top of the page, magnified, reading jo@brightside.co next to a green dot, with edit and close buttons.">
+<p class="caption">The notch names the session the page belongs to.</p>
+
+<h2>Sessions that name themselves</h2>
+<p>A new session starts unnamed. Name it from the notch, or add a site rule and
+let Idently do it: a rule points at the field that holds the account, usually
+the email box on the sign-in form, and the session takes whatever you type
+there. The notch previews the name as you type it.</p>
+<p>You don't need to write a selector. Open <strong>Create rule for this site</strong> from
+the popup and <strong>Detect automatically</strong> lists the likely fields on the page,
+then <strong>Test on this page</strong> shows what each one reads. An optional pattern,
+such as an email shape, stops half-typed values from being used.</p>
+
+<img class="hero" src="preview-auto-name.png" width="1600" height="800" loading="lazy"
+     alt="A Pinecrest sign-in page with jo@brightside.co typed into the email field and previewed in the notch, next to Idently's New site rule window showing the detected email field and a passing test.">
+<p class="caption">A rule reads the sign-in field and names the session as you type.</p>
+
+<h2>Find any session in a keystroke</h2>
+<p>The popup opens with the search box focused. Type part of a name, a site or a
+note, use the arrow keys, and press Enter to open that session in a new tab.
+Every word has to match, so <code>acme admin</code> narrows rather than widens.</p>
+<p>Sessions whose container has no cookies left for their site are flagged as
+<em>logged out</em>, so you can tell at a glance which logins have expired.</p>
+
+<h2>Organise as you go</h2>
+<p>Edit any session's name, notes and colour from the popup. Change its domain
+to merge two groups that are really one site, say <code>account.example.com</code>
+into <code>example.com</code>. New session tabs are filed into a tab group named
+after the site.</p>
+
+<h2>Backup and recovery</h2>
+<p>Export your sessions to a JSON file and import them into another Firefox
+profile or computer. Include cookies and live logins move too; leave them out
+and only the names, notes and colours do. Firefox keeps containers even when an
+extension is removed, so after a reinstall <strong>Recover containers</strong> finds the
+ones Idently was tracking and adopts them back, logins intact.</p>
+
+<h2>Works alongside Multi-Account Containers</h2>
+<p>Idently isn't a replacement for Mozilla's Multi-Account Containers. Think of
+it as a more in-depth take on the same idea, built for when you have a lot of
+logins. Multi-Account Containers suits a few long-lived containers, such as
+Work, Personal and Shopping. But it doesn't name containers for you, and one
+flat list gets hard to manage once you have more than a handful. Idently adds
+what that takes: sessions named automatically from the login email, grouped by
+site, searchable by name, site or note, and labelled on the page itself.</p>
+<p>You can use both at once. Containers are built into Firefox, and both
+extensions use the same ones, so Idently's sessions appear in Multi-Account
+Containers' list as ordinary containers named <code>site - name</code>. You don't need
+Multi-Account Containers installed, though: Idently uses Firefox's containers
+directly and turns them on if they're off.</p>
+<p>Containers aren't available in private windows, so Idently's sessions open in
+normal windows only.</p>
+
+<h2>Privacy</h2>
+<p>Idently makes no network requests at all. No account, no analytics, no
+tracking, no server. Sessions are stored by Firefox on your computer. Site rules
+and the notch setting use Firefox's sync storage, so they follow you between
+your own devices only if you use Firefox Sync. The <a href="privacy.html">privacy
+policy</a> lists exactly what is stored and why each permission is needed.</p>
+
+<h2>Help and source</h2>
+<p>Questions, bugs and feature requests go to the <a href="support.html">support
+page</a>. Idently is MIT licensed and the full source is on
+<a href="https://github.com/dazecoop/idently">GitHub</a>.</p>
+</main>
+
+<footer>
+  <a href="https://addons.mozilla.org/firefox/addon/idently/">Firefox Add-ons</a> ·
+  <a href="support.html">Support</a> ·
+  <a href="privacy.html">Privacy policy</a> ·
+  <a href="https://github.com/dazecoop/idently">source on GitHub</a> ·
+  MIT licensed
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support — Idently</title>
+<meta name="description" content="Get help with Idently, report a bug or ask for a feature.">
+<link rel="icon" href="icon32.png" type="image/png">
+<link rel="canonical" href="https://dazecoop.github.io/idently/support.html">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a class="brand" href="./">
+    <img src="icon32.png" alt="" width="32" height="32">
+    <span>Idently</span>
+  </a>
+  <nav>
+    <a href="./">Overview</a>
+    <a href="support.html" aria-current="page">Support</a>
+    <a href="privacy.html">Privacy</a>
+  </nav>
+</header>
+
+<main>
+<h1>Support</h1>
+
+<p class="lede">Idently is free and open source, maintained in the open on GitHub. The
+fastest way to get help, report a bug or ask for a feature is to
+<a href="https://github.com/dazecoop/idently/issues">open an issue</a>.</p>
+
+<h2>Reporting a bug</h2>
+<p>Include as much of this as you can:</p>
+<ul>
+  <li>Your Firefox version, and Idently's version from <code>about:addons</code>.</li>
+  <li>What you did, what you expected, and what happened instead.</li>
+  <li>For a site rule that won't fire: the rule (Settings → Site rules →
+      Export gives you a JSON file) and a description of the sign-in page.
+      Leave out anything private.</li>
+  <li>A screenshot, if something looks wrong.</li>
+</ul>
+<p>Never attach a session export made with <strong>Include cookies</strong>: it contains
+live logins.</p>
+
+<h2>Common questions</h2>
+
+<h3>Does Idently replace Multi-Account Containers?</h3>
+<p>No, and you can keep using both. They share Firefox's containers, so
+Idently's sessions show up in Multi-Account Containers' list as containers named
+<code>site - name</code>. Multi-Account Containers is fine for a few long-lived
+containers. Idently is for many logins, such as fifteen accounts on one site: it
+names each session after the email you sign in with, groups sessions by site,
+and lets you search them.</p>
+
+<h3>Do I need Multi-Account Containers installed?</h3>
+<p>No. Containers are part of Firefox itself, and Idently uses them directly.</p>
+
+<h3>"New session tab" is greyed out.</h3>
+<p>Sessions are always started for the site in the current tab, so the button
+needs a normal web page open: not a new tab, <code>about:</code> page or Idently's
+own Settings. Open the site first, then click it.</p>
+
+<h3>Can I use Idently in a private window?</h3>
+<p>Not yet. Firefox doesn't offer containers in private windows, so sessions
+always open in a normal window.</p>
+
+<h3>A session says "logged out" but I'm still signed in.</h3>
+<p>That flag means the container has no cookies at all for the session's site.
+Some sites keep you signed in another way, such as local storage, or set their
+cookies on a different domain from the one the session was recorded under.
+Editing the session's domain to the one the site actually uses usually fixes it.</p>
+
+<h3>The same site shows up as two groups.</h3>
+<p>Sessions are grouped by the domain recorded when each was created, so
+<code>account.example.com</code> and <code>example.com</code> become two groups. Edit
+one session's domain to match the other and they merge.</p>
+
+<h3>My site rule never names the session.</h3>
+<p>Rules only run on tabs whose session has no name yet, and only on pages whose
+address matches the rule's domain (and path prefix, if set). Use
+<strong>Test on this page</strong> in the rule builder while the sign-in page is open:
+it shows what the selector reads, and whether that matches your value pattern.
+A pattern that rejects the value stops the rule firing, which is the point of
+it, so check it's not stricter than you meant.</p>
+
+<h3>The notch covers part of a site.</h3>
+<p>Hold Option (Alt) and drag it anywhere along the top edge; Idently remembers
+where you left it. The × hides it until the page reloads, and Settings can turn
+it off everywhere.</p>
+
+<h3>I reinstalled Idently and my sessions are gone.</h3>
+<p>Firefox keeps containers when an extension is removed, but the list that
+names them goes with the extension. Open Settings → Recover containers →
+Scan, check the domain on each one, and import them. Their logins come back
+with them.</p>
+
+<h3>Can I move my sessions to another computer?</h3>
+<p>Yes: Settings → Backup → Export, then Import on the other computer.
+Tick <strong>Include cookies</strong> to carry the logins across too, and treat that
+file like a password.</p>
+
+<h3>Is there a Chrome version?</h3>
+<p>No. Chrome has no equivalent of Firefox containers that an extension can
+use, so separate, isolated logins in ordinary tabs aren't possible there.</p>
+
+<h2>Feature requests</h2>
+<p>Open an issue describing what you'd want and the situation it would help with.
+Pull requests are welcome too; the source is MIT licensed.</p>
+
+<h2>Contact</h2>
+<p>For anything else, including privacy questions, open an issue on the
+<a href="https://github.com/dazecoop/idently/issues">Idently repository</a> or
+contact <a href="https://github.com/dazecoop">@dazecoop</a> on GitHub.</p>
+</main>
+
+<footer>
+  <a href="./">Overview</a> ·
+  <a href="privacy.html">Privacy policy</a> ·
+  <a href="https://github.com/dazecoop/idently">source on GitHub</a> ·
+  MIT licensed
+</footer>
+
+</div>
+</body>
+</html>

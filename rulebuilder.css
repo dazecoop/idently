@@ -82,6 +82,7 @@ h1 { font-size: 15px; margin: 0; }
   text-align: left;
   border: 1px solid var(--border);
   background: var(--bg-subtle);
+  color: var(--text);
   border-radius: 8px;
   padding: 8px 10px;
   cursor: pointer;

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Idently</title>
+<meta name="description" content="Idently does not collect or transmit any of your data. It makes no network requests: no account, no analytics, no tracking and no server.">
+<link rel="icon" href="icon32.png" type="image/png">
+<link rel="canonical" href="https://dazecoop.github.io/idently/privacy.html">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a class="brand" href="./">
+    <img src="icon32.png" alt="" width="32" height="32">
+    <span>Idently</span>
+  </a>
+  <nav>
+    <a href="./">Overview</a>
+    <a href="support.html">Support</a>
+    <a href="privacy.html" aria-current="page">Privacy</a>
+  </nav>
+</header>
+
+<main>
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated 15 October 2026</p>
+
+<p class="lede">Idently does not collect or transmit any of your data. It makes no network
+requests of any kind. There is no account, no analytics, no tracking and no
+Idently server. Everything it stores is kept by Firefox, on your own computer.</p>
+
+<h2>What Idently stores</h2>
+<p>In Firefox's local extension storage, on this computer only:</p>
+<ul>
+  <li><strong>Your sessions.</strong> For each one: the name, notes and colour you gave it,
+      the site it belongs to, the address it opens, when it was created and last
+      used, and the ID of the Firefox container that holds it.</li>
+  <li><strong>Where you parked the notch</strong> along the top of the page.</li>
+</ul>
+<p>In Firefox's sync storage:</p>
+<ul>
+  <li><strong>Your site rules</strong> (a site, a selector and an optional pattern for each)
+      and <strong>whether the notch is shown</strong>.</li>
+</ul>
+<p>Sync storage stays on this computer unless you use Firefox Sync, in which case
+Firefox copies it to your other devices through your own Firefox account, with
+Mozilla's end-to-end encryption. Idently never sees or handles that transfer.</p>
+<p>Your logins themselves, the cookies and site data, are kept by Firefox inside
+each container, exactly as they would be without Idently. Uninstalling Idently
+deletes everything listed above. Firefox keeps the containers and their logins,
+which is what lets <strong>Recover containers</strong> adopt them back after a
+reinstall; remove them in Firefox's settings if you don't want them.</p>
+
+<h2>What Idently reads</h2>
+<ul>
+  <li><strong>Cookie counts.</strong> When you open the popup, Idently checks whether each
+      session's container still has cookies for its own site, to flag sessions
+      that look logged out. It only checks whether matching cookies exist, on
+      your computer, and stores nothing from them.</li>
+  <li><strong>One field on the page, if you set up a rule.</strong> On a tab belonging to an
+      unnamed session, a site rule reads the one element it points at (usually
+      the email field on a sign-in form) to name the session. It stops once the
+      session has a name. Without a rule for the site, nothing on the page is read.</li>
+  <li><strong>Field candidates, when you ask.</strong> <strong>Detect automatically</strong> in
+      the rule builder scans the page you're on for fields that look like an
+      account name or email, and shows them to you. It never reads password fields.</li>
+</ul>
+
+<h2>Backups</h2>
+<p><strong>Export</strong> writes your sessions to a JSON file that you save wherever you
+choose. If you tick <strong>Include cookies / session data</strong>, the file also contains
+the cookies from each session's container, which are live logins: anyone with
+the file can sign in as you, so treat it like a password. Idently never sends
+an export anywhere; it only hands it to Firefox's download.</p>
+
+<h2>Permissions, and why</h2>
+<div class="table-scroll">
+<table>
+  <tr><th>Permission</th><th>Used for</th></tr>
+  <tr><td><code>contextualIdentities</code></td><td>Creating, renaming and removing the Firefox containers your sessions live in.</td></tr>
+  <tr><td><code>cookies</code></td><td>Opening tabs in a container, the logged-out check, and exporting or importing cookies when you ask.</td></tr>
+  <tr><td><code>tabs</code></td><td>Opening a session in a new tab and knowing which session the current tab belongs to.</td></tr>
+  <tr><td><code>tabGroups</code></td><td>Filing a session's tabs into a tab group named after its site.</td></tr>
+  <tr><td><code>storage</code></td><td>Keeping the sessions, rules and settings described above.</td></tr>
+  <tr><td>Access to all websites</td><td>Showing the notch on whichever site a session is for, and running site rules there. Sessions can be for any site, including <code>localhost</code>.</td></tr>
+</table>
+</div>
+
+<h2>Network requests</h2>
+<p>None. Idently does not contact any server, Idently's or anyone else's. There
+is no telemetry, crash reporting or usage tracking. The only traffic is the
+pages you open yourself.</p>
+
+<h2>Clipboard</h2>
+<p>Clicking the notch copies the session's name to your clipboard. Idently never
+reads the clipboard.</p>
+
+<h2>Changes and contact</h2>
+<p>Any change to this policy is published here with a new date, and the full
+history is in the <a href="https://github.com/dazecoop/idently">source repository</a>.
+For questions, open an issue on
+<a href="https://github.com/dazecoop/idently/issues">GitHub</a>.</p>
+</main>
+
+<footer>
+  <a href="./">Overview</a> ·
+  <a href="support.html">Support</a> ·
+  <a href="https://github.com/dazecoop/idently">source on GitHub</a> ·
+  MIT licensed
+</footer>
+
+</div>
+</body>
+</html>

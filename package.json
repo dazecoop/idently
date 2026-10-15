@@ -1,0 +1,17 @@
+{
+  "name": "idently",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Idently - named, colour-coded login sessions for Firefox, built on containers",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "capture": "node scripts/capture.js",
+    "store-assets": "node scripts/capture.js && node scripts/compose-slides.js firefox && node scripts/compose-slides.js social"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.12.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
