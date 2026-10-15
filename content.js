@@ -822,10 +822,13 @@
        notch colour on each side with a quarter-circle masked out of the
        corner facing AWAY from the bar, which leaves ink hugging the top edge
        and the bar's vertical side — so the edge curves out and back in
-       rather than meeting the bar at a hard right angle. */
+       rather than meeting the bar at a hard right angle. Each square is 1px
+       wider than the fillet so it tucks under the bar: butted exactly
+       against it, the two anti-aliased edges leave a faint vertical seam
+       whenever the notch sits on a half pixel (translateX(-50%) often does). */
     .badge::before, .badge::after {
       content: ""; position: absolute; top: 0;
-      width: ${NOTCH_FILLET}px; height: ${NOTCH_FILLET}px;
+      width: ${NOTCH_FILLET + 1}px; height: ${NOTCH_FILLET}px;
       background: ${NOTCH_BG}; pointer-events: none;
     }
     .badge::before {
