@@ -14,8 +14,7 @@
     "cookies",
     "tabs",
     "tabGroups",
-    "storage",
-    "windows"
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"

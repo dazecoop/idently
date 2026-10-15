@@ -27,6 +27,9 @@ async function init() {
   document.getElementById("exportBtn").addEventListener("click", exportData);
   document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
   document.getElementById("importFile").addEventListener("change", importData);
+  document.getElementById("exportRulesBtn").addEventListener("click", exportRules);
+  document.getElementById("importRulesBtn").addEventListener("click", () => document.getElementById("importRulesFile").click());
+  document.getElementById("importRulesFile").addEventListener("change", importRules);
 
   // Rules can also be created from the popup's "Create rule for this site"
   // window, which may well be open at the same time as this page — reflect
@@ -46,6 +49,138 @@ async function init() {
   });
 }
 
+// --- Site rules export / import -----------------------------------------
+// Separate from the Backup section below, which deals in sessions and their
+// cookies. Rules are small, contain no credentials and are the thing worth
+// sharing between people or profiles, so they get their own plain file.
+
+const RULES_FILE_TYPE = "idently-site-rules";
+
+function setRulesBackupStatus(text) {
+  document.getElementById("rulesBackupStatus").textContent = text;
+}
+
+function downloadJson(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportRules() {
+  if (rules.length === 0) {
+    setRulesBackupStatus("Nothing to export — no site rules yet.");
+    return;
+  }
+  downloadJson(
+    { type: RULES_FILE_TYPE, version: 1, exportedAt: new Date().toISOString(), rules },
+    `idently-site-rules-${new Date().toISOString().slice(0, 10)}.json`
+  );
+  setRulesBackupStatus(`Exported ${rules.length} rule${rules.length === 1 ? "" : "s"}.`);
+}
+
+// Accepts our own export, a bare array of rules, or a full backup file that
+// happens to carry a siteRules key — all three are things someone might
+// reasonably drop in here.
+function extractRules(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.rules)) return data.rules;
+  if (Array.isArray(data?.siteRules)) return data.siteRules;
+  return null;
+}
+
+// Rules drive a content script that queries the page, so a malformed one is
+// worth dropping rather than storing: anything without a domain + selector
+// can never match, and a broken regex would throw on every page load.
+function sanitizeRule(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+  const domain = str(raw.domain, 200);
+  const selector = str(raw.selector, 500);
+  if (!domain || !selector) return null;
+
+  const pattern = str(raw.pattern, 300);
+  if (pattern) {
+    try { new RegExp(pattern); } catch { return null; }
+  }
+
+  return {
+    id: typeof raw.id === "string" && raw.id ? raw.id : crypto.randomUUID(),
+    label: str(raw.label, 60),
+    domain,
+    pathPrefix: str(raw.pathPrefix, 200),
+    selectorType: raw.selectorType === "css" ? "css" : "xpath",
+    selector,
+    readFrom: raw.readFrom === "text" ? "text" : "value",
+    pattern,
+    shortLabel: str(raw.shortLabel, 20)
+  };
+}
+
+async function importRules(e) {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+
+  let incoming;
+  try {
+    incoming = extractRules(JSON.parse(await file.text()));
+  } catch {
+    setRulesBackupStatus("Import failed — not a valid JSON file.");
+    return;
+  }
+  if (!incoming) {
+    setRulesBackupStatus("Import failed — no site rules found in that file.");
+    return;
+  }
+
+  // Merge rather than replace, so importing someone else's rules can't wipe
+  // your own. A rule with a known id updates in place; one that matches an
+  // existing rule on domain + path + selector is a duplicate and skipped
+  // (re-importing the same file twice shouldn't double the list).
+  const merged = rules.slice();
+  const indexById = new Map(merged.map((r, i) => [r.id, i]));
+  const sameTarget = (a, b) =>
+    a.domain === b.domain && a.pathPrefix === b.pathPrefix && a.selector === b.selector;
+
+  let added = 0, updated = 0, skipped = 0, invalid = 0;
+  for (const raw of incoming) {
+    const rule = sanitizeRule(raw);
+    if (!rule) { invalid++; continue; }
+
+    const existingIdx = indexById.get(rule.id);
+    if (existingIdx !== undefined) {
+      merged[existingIdx] = rule;
+      updated++;
+      continue;
+    }
+    if (merged.some((r) => sameTarget(r, rule))) { skipped++; continue; }
+
+    indexById.set(rule.id, merged.length);
+    merged.push(rule);
+    added++;
+  }
+
+  if (added || updated) {
+    rules = merged;
+    await browser.storage.sync.set({ siteRules: rules });
+    renderRules();
+  }
+
+  const parts = [];
+  if (added) parts.push(`added ${added}`);
+  if (updated) parts.push(`updated ${updated}`);
+  if (skipped) parts.push(`skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}`);
+  if (invalid) parts.push(`ignored ${invalid} invalid`);
+  setRulesBackupStatus(parts.length ? `Imported: ${parts.join(", ")}.` : "Nothing to import — that file had no usable rules.");
+}
+
 function setBackupStatus(text) {
   document.getElementById("backupStatus").textContent = text;
 }
@@ -55,15 +190,7 @@ async function exportData() {
   setBackupStatus("Exporting…");
   const payload = await browser.runtime.sendMessage({ action: "exportData", includeCookies });
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `idently-export-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  downloadJson(payload, `idently-export-${new Date().toISOString().slice(0, 10)}.json`);
 
   const count = Object.keys(payload.identities || {}).length;
   setBackupStatus(`Exported ${count} session${count === 1 ? "" : "s"}${includeCookies ? " with cookies" : ""}.`);

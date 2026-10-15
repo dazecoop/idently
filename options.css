@@ -242,6 +242,18 @@ h2 { font-size: 16px; margin: 0 0 4px; }
 
 .backup-actions { display: flex; gap: 10px; }
 
+/* Export/import/add sit together in the Site rules heading. flex-shrink: 0
+   keeps them on one line while the section description wraps beside them. */
+.section-head-actions { display: flex; gap: 10px; flex-shrink: 0; }
+
+.rules-backup-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: -6px 0 14px;
+}
+.rules-backup-status:empty { display: none; }
+
 .hidden-file { display: none; }
 
 .backup-status {
