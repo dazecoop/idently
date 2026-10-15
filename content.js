@@ -9,9 +9,14 @@
     orange: "#e08a3d", red: "#e05a5a", pink: "#e06ab0", purple: "#9966cc", toolbar: "#9a9a9e"
   };
 
+  const COLORS = Object.keys(COLOR_HEX).filter((c) => c !== "toolbar");
+
   const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
   const ICONS = {
-    close: `<svg ${SVG_ATTRS}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+    close: `<svg ${SVG_ATTRS}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    // Shown on an unnamed session: lit when a site rule is watching this
+    // page and will name the session for you, unlit when nothing is.
+    rule: `<svg ${SVG_ATTRS}><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>`
   };
 
   function mkIconBtn(icon, title, onClick) {
@@ -27,6 +32,11 @@
   // and the radius of those fillets.
   const NOTCH_BG = "#242428";
   const NOTCH_FILLET = 14;
+  // Size of the expanded naming form, and the easing both axes share. The
+  // values are fixed because an auto size can't be animated to.
+  const NOTCH_FORM_W = 272;
+  const NOTCH_FORM_H = 132;
+  const NOTCH_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
   // How close to dead centre a drag has to land before it snaps there.
   const NOTCH_SNAP = 26;
 
@@ -44,6 +54,17 @@
   let notchPos = "center";
   let notchDidDrag = false;
   let copiedTimer = null;
+  // The naming form is open. While it is, renderBadge() leaves the notch
+  // alone — a storage change or a preview tick must never rebuild the DOM
+  // out from under someone mid-type.
+  let notchExpanded = false;
+  let formColor = null;
+  // Latest value the site rule can see in the watched field, or null. Shown
+  // in place of "Unnamed" so you can watch the name the session is about to
+  // take shape as you type it into the page's own login form.
+  let rulePreview = null;
+  // One naming attempt per page load, however it happens — rule or by hand.
+  let autoNameAttempted = false;
 
   let host, root, badgeEl;
 
@@ -207,50 +228,213 @@
   }
 
   // A floating marker hanging off the top edge of the page, naming the
-  // session this tab belongs to. Only shown for a confirmed session that
-  // actually has a name: an unnamed or untracked tab has nothing worth
-  // saying.
+  // session this tab belongs to. Three states:
+  //   untracked  — this tab was never opened as a session: no notch at all
+  //   unnamed    — a session exists but has no name yet: "Unnamed", click
+  //                to open the naming form
+  //   named      — the name, click to copy it
   function renderBadge(current) {
-    const name = current && current.confirmed ? (current.name || "").trim() : "";
-    if (!badgeEnabled || badgeDismissed || !name) {
+    // Never rebuild while the naming form is open: a storage change or a
+    // rule-preview tick would wipe out half-typed input.
+    if (notchExpanded) return;
+
+    if (!badgeEnabled || badgeDismissed || !current) {
       badgeEl.style.display = "none";
       return;
     }
+    const name = (current.name || "").trim();
+    const named = !!(current.confirmed && name);
+
     badgeEl.style.display = "";
+    badgeEl.className = "badge";
     badgeEl.innerHTML = "";
+    badgeEl.style.width = "";
+    badgeEl.style.height = "";
     clearTimeout(copiedTimer);
+
+    const clip = document.createElement("div");
+    clip.className = "badge-clip";
+
+    const collapsed = document.createElement("div");
+    collapsed.className = "badge-collapsed";
 
     const dot = document.createElement("span");
     dot.className = "badge-dot";
     dot.style.background = COLOR_HEX[current.color] || COLOR_HEX.toolbar;
 
     const label = document.createElement("span");
-    label.className = "badge-name";
-    label.textContent = name;
+    label.className = "badge-name" + (named ? "" : " badge-name--unnamed");
+    // An unnamed session with a rule watching the page previews the value as
+    // it's typed, so you can see what it's about to be called.
+    label.textContent = named ? name : (rulePreview || "Unnamed");
 
-    // Confirmation is an overlay laid over the name rather than a swap of
-    // the name's text: the notch keeps its exact width, so it can't jump
-    // around (or drift off centre) every time something is copied.
     const copied = document.createElement("span");
     copied.className = "badge-copied";
 
     const main = document.createElement("button");
     main.className = "badge-main";
-    main.title = `${name} — click to copy, Option-drag to move`;
+    main.title = named
+      ? `${name} — click to copy, Option-drag to move`
+      : "Click to name this session, Option-drag to move";
     main.append(dot, label, copied);
     main.addEventListener("click", (e) => {
       e.stopPropagation();
-      // The click that ends an Option-drag shouldn't also copy.
+      // The click that ends an Option-drag shouldn't also act.
       if (notchDidDrag) { notchDidDrag = false; return; }
-      copyToClipboard(name).then((ok) => flashCopied(copied, ok));
+      if (named) {
+        copyToClipboard(name).then((ok) => flashCopied(copied, ok));
+      } else {
+        expandForm(current);
+      }
     });
+    collapsed.append(main);
 
-    badgeEl.append(main, mkIconBtn("close", "Hide until this page reloads", () => {
+    if (!named) {
+      const rule = findSiteRule();
+      const ruleIcon = document.createElement("span");
+      ruleIcon.className = "badge-rule" + (rule ? " badge-rule--lit" : "");
+      ruleIcon.innerHTML = ICONS.rule;
+      ruleIcon.title = rule
+        ? `Auto-naming from the rule "${rule.label || rule.domain}" — fill the login field and this names itself`
+        : "No auto-naming rule for this site";
+      collapsed.append(ruleIcon);
+    }
+
+    collapsed.append(mkIconBtn("close", "Hide until this page reloads", () => {
       if (notchDidDrag) { notchDidDrag = false; return; }
       badgeDismissed = true;
       renderBadge(current);
     }));
+
+    clip.append(collapsed);
+    badgeEl.append(clip);
     applyNotchPosition();
+  }
+
+  // --- naming form (the "dynamic island" expansion) ---------------------
+
+  // Width and height can't animate from content-size to content-size, so the
+  // collapsed box is pinned to its measured pixel size first; the expanded
+  // class then supplies fixed target values and CSS does the rest.
+  function expandForm(current) {
+    const w = badgeEl.offsetWidth, h = badgeEl.offsetHeight;
+    badgeEl.style.width = w + "px";
+    badgeEl.style.height = h + "px";
+
+    notchExpanded = true;
+    formColor = current.color || COLORS[0];
+    // Opening the form by hand means naming it by hand — a rule committing
+    // underneath would yank the field away mid-type. Cancelling puts the
+    // watcher back.
+    stopAutoNaming();
+
+    const form = buildForm(current);
+    badgeEl.querySelector(".badge-clip").append(form);
+
+    // Two frames: the browser has to see the pinned start size before the
+    // class changes it, or there's nothing to interpolate from.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      badgeEl.classList.add("badge--expanded");
+      badgeEl.style.width = "";
+      badgeEl.style.height = "";
+      form.querySelector("input")?.focus();
+    }));
+
+    document.addEventListener("keydown", onFormKeydown, true);
+    document.addEventListener("mousedown", onFormOutsideClick, true);
+  }
+
+  function collapseForm(restartAutoNaming) {
+    if (!notchExpanded) return;
+    notchExpanded = false;
+    document.removeEventListener("keydown", onFormKeydown, true);
+    document.removeEventListener("mousedown", onFormOutsideClick, true);
+    badgeEl.classList.remove("badge--expanded");
+    const current = identities[ctx.cookieStoreId];
+    // Wait out the shrink before swapping the content back, so the notch
+    // doesn't visibly pop to its collapsed form mid-animation.
+    setTimeout(() => {
+      renderBadge(current);
+      if (restartAutoNaming) maybeStartAutoNaming();
+    }, 260);
+  }
+
+  function onFormKeydown(e) {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    collapseForm(true);
+  }
+
+  function onFormOutsideClick(e) {
+    // The notch lives in a closed shadow root, so a click inside it reports
+    // the host as its target — anything else is genuinely outside.
+    if (e.composedPath?.().includes(host) || e.target === host) return;
+    collapseForm(true);
+  }
+
+  function buildForm(current) {
+    const form = document.createElement("div");
+    form.className = "badge-form";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "badge-input";
+    input.maxLength = 60;
+    input.placeholder = "Name this session";
+    input.value = (current.name || "").trim() || rulePreview || "";
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); save(); }
+    });
+
+    const swatches = document.createElement("div");
+    swatches.className = "badge-swatches";
+    for (const color of COLORS) {
+      const sw = document.createElement("button");
+      sw.className = "badge-swatch" + (color === formColor ? " badge-swatch--on" : "");
+      sw.style.background = COLOR_HEX[color];
+      sw.title = color;
+      sw.addEventListener("click", (e) => {
+        e.stopPropagation();
+        formColor = color;
+        for (const el of swatches.children) el.classList.remove("badge-swatch--on");
+        sw.classList.add("badge-swatch--on");
+      });
+      swatches.append(sw);
+    }
+
+    const cancel = document.createElement("button");
+    cancel.className = "badge-btn";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", (e) => { e.stopPropagation(); collapseForm(true); });
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "badge-btn badge-btn--primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", (e) => { e.stopPropagation(); save(); });
+
+    const actions = document.createElement("div");
+    actions.className = "badge-actions";
+    actions.append(cancel, saveBtn);
+
+    async function save() {
+      const value = input.value.trim();
+      if (!value) { input.focus(); return; }
+      // Don't let the rule fire for this page load after a manual name.
+      autoNameAttempted = true;
+      try {
+        await browser.runtime.sendMessage({
+          action: "confirmIdentity", cookieStoreId: ctx.cookieStoreId,
+          name: value, notes: current.notes || "", color: formColor
+        });
+      } catch (e) {
+        logError("confirmIdentity from notch form failed:", e);
+      }
+      collapseForm(false);
+    }
+
+    form.append(input, swatches, actions);
+    return form;
   }
 
   // navigator.clipboard needs a secure context, so it's simply absent on
@@ -452,11 +636,21 @@
     }
   }
 
+  // read() runs on every keystroke, mutation and poll tick, so only an
+  // actual change is allowed to reach the DOM — otherwise the notch would
+  // rebuild itself twice a second for its whole life.
+  function setRulePreview(value) {
+    if (value === rulePreview) return;
+    rulePreview = value;
+    renderBadge(identities[ctx.cookieStoreId]);
+  }
+
   function stopAutoNaming() {
     if (autoNameCleanup) {
       try { autoNameCleanup(); } catch {}
       autoNameCleanup = null;
     }
+    setRulePreview(null);
   }
 
   // Generic watcher built from a stored rule (see the Settings page). The
@@ -481,6 +675,7 @@
       const state = !node ? "no node" : JSON.stringify(value);
       if (state !== lastLogged) log(`[${tag}] target:`, state);
       lastLogged = state;
+      setRulePreview(value || null);
       return value || null;
     };
 
@@ -569,12 +764,36 @@
        viewport. */
     .badge {
       position: fixed; top: 0; left: 50%; transform: translateX(-50%);
-      display: flex; align-items: center; gap: 2px;
+      box-sizing: border-box;
       background: ${NOTCH_BG}; border-radius: 0 0 16px 16px;
-      padding: 5px 5px 7px 4px;
       max-width: min(320px, 60vw);
       filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+      transition: width 0.28s ${NOTCH_EASE}, height 0.28s ${NOTCH_EASE},
+                  border-radius 0.28s ${NOTCH_EASE};
     }
+    /* The size animation has to clip its contents, but .badge itself can't:
+       its corner fillets are pseudo-elements sitting OUTSIDE its box, and
+       overflow:hidden on .badge erases them. So the clipping lives on an
+       inner wrapper instead. */
+    .badge-clip {
+      position: relative; width: 100%; height: 100%;
+      overflow: hidden; border-radius: inherit;
+    }
+    .badge-collapsed {
+      display: flex; align-items: center; gap: 2px;
+      padding: 5px 5px 7px 4px;
+      transition: opacity 0.14s ease;
+    }
+
+    /* The expansion. Both sizes are explicit because neither width nor
+       height can animate from one content size to another — expandForm()
+       pins the collapsed pixel size just before this class lands. */
+    .badge--expanded {
+      width: ${NOTCH_FORM_W}px; height: ${NOTCH_FORM_H}px;
+      max-width: min(${NOTCH_FORM_W}px, 92vw);
+      border-radius: 0 0 20px 20px;
+    }
+    .badge--expanded .badge-collapsed { opacity: 0; pointer-events: none; }
 
     /* The concave corners where the notch meets the top edge: a square of
        notch colour on each side with a quarter-circle masked out of the
@@ -635,5 +854,57 @@
       transition: opacity 0.12s ease;
     }
     .badge-copied--show { opacity: 1; }
+
+    /* An unnamed session reads as a prompt, not as a name. */
+    .badge-name--unnamed { color: #a8a8b0; font-weight: 500; }
+
+    .badge-rule {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 3px; color: #4a4a52; flex-shrink: 0;
+    }
+    .badge-rule svg { width: 12px; height: 12px; }
+    .badge-rule--lit { color: #e0c341; }
+
+    /* --- naming form ----------------------------------------------------
+       Absolutely positioned so it contributes nothing to the collapsed
+       size, which is what gets measured on the way in. */
+    .badge-form {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; gap: 9px;
+      padding: 12px 13px 14px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.16s ease;
+    }
+    .badge--expanded .badge-form { opacity: 1; pointer-events: auto; transition-delay: 0.08s; }
+
+    .badge-input {
+      width: 100%; box-sizing: border-box;
+      border: 1px solid #3a3a42; border-radius: 8px;
+      background: #1b1b1f; color: #f0f0f2;
+      padding: 7px 9px; font-size: 12px; font-family: inherit;
+    }
+    .badge-input::placeholder { color: #6b6b74; }
+    .badge-input:focus { outline: none; border-color: #5b5bd6; }
+
+    .badge-swatches { display: flex; gap: 6px; }
+    .badge-swatch {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid transparent; padding: 0; cursor: pointer;
+      background-clip: padding-box;
+      transition: transform 0.1s ease;
+    }
+    .badge-swatch:hover { transform: scale(1.15); }
+    .badge-swatch--on { border-color: #f0f0f2; }
+
+    .badge-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: auto; }
+    .badge-btn {
+      border: none; border-radius: 7px; cursor: pointer;
+      padding: 6px 12px; font-size: 11px; font-weight: 600; font-family: inherit;
+      background: #33333a; color: #d8d8dc;
+      transition: background 0.12s ease;
+    }
+    .badge-btn:hover { background: #3f3f48; }
+    .badge-btn--primary { background: #5b5bd6; color: #fff; }
+    .badge-btn--primary:hover { background: #6a6ae0; }
   `;
 })();
