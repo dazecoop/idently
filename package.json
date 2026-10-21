@@ -1,6 +1,6 @@
 {
   "name": "idently",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Idently - named, colour-coded login sessions for Firefox, built on containers",
   "scripts": {
